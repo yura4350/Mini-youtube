@@ -1,6 +1,6 @@
 # Media Server Plan
 ### TEAM NAME
-### Names
+### Iurii Beliaev, Ziao Huang, Changmin Shin, Temesgen Tewolde
 
 
 ## Questions or Concerns
@@ -10,11 +10,16 @@
  
 ## Project Goals
  
- * Domain
+ * Domain: Video Streaming
  
  * Micro-services
+ - Commnunication
+ - Intelligence
  
  * Programming languages, Frontend frameworks, and Database
+ - Python for backend (FastAPI, to be discussed)
+ - React (TypeScript) for frontend (Next.js)
+ - Database: RDBMS vs NoSQL???
  
 
 ## Use Cases
