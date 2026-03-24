@@ -409,7 +409,7 @@ To enable core features (subscription), we need to keep a list of which channels
 
 ## Wireframe
 
- * [Wireframe (Figma)](https://www.figma.com/files/team/1599632072937555124/project/576456240?fuid=1599632069095787846)
+ * [Wireframe (Figma)](https://www.figma.com/make/l4aLrOUNQWQbD8vT53mCOb/Basic-YouTube-Clone?t=VMCbRGpyGuY6JU9O-1)
 
 
 ### Project Starting Priorities
