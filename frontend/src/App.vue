@@ -1,85 +1,121 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
-import HelloWorld from './components/HelloWorld.vue'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+
+onMounted(() => {
+  authStore.hydrate()
+})
+
+function logout() {
+  authStore.logout()
+}
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
+  <div class="app-shell">
+    <header class="topbar">
+      <RouterLink to="/" class="brand">
+        <span class="brand-icon" aria-hidden="true">▶</span>
+        <span>Media Hub</span>
+      </RouterLink>
 
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
-
-      <nav>
+      <nav class="topnav">
         <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
+        <RouterLink v-if="!authStore.isAuthenticated" to="/login">Login</RouterLink>
+        <RouterLink v-if="!authStore.isAuthenticated" to="/register">Register</RouterLink>
+        <RouterLink v-if="authStore.isAuthenticated" to="/profile">Profile</RouterLink>
+        <button v-if="authStore.isAuthenticated" class="logout-btn" @click="logout">Logout</button>
       </nav>
-    </div>
-  </header>
+    </header>
 
-  <RouterView />
+    <RouterView />
+  </div>
 </template>
 
 <style scoped>
-header {
-  line-height: 1.5;
-  max-height: 100vh;
+.app-shell {
+  min-height: 100vh;
 }
 
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 68px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  backdrop-filter: blur(8px);
+  background: rgba(7, 8, 10, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-nav {
-  width: 100%;
-  font-size: 12px;
-  text-align: center;
-  margin-top: 2rem;
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  color: #fff;
+  text-decoration: none;
+  letter-spacing: 0.03em;
+  font-weight: 700;
 }
 
-nav a.router-link-exact-active {
-  color: var(--color-text);
+.brand-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  background: linear-gradient(135deg, #dc2626, #ef4444);
 }
 
-nav a.router-link-exact-active:hover {
-  background-color: transparent;
+.topnav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-nav a {
-  display: inline-block;
-  padding: 0 1rem;
-  border-left: 1px solid var(--color-border);
+.topnav a {
+  color: #d4d7de;
+  text-decoration: none;
+  font-size: 14px;
+  padding: 8px 10px;
+  border-radius: 8px;
 }
 
-nav a:first-of-type {
-  border: 0;
+.topnav a.router-link-exact-active,
+.topnav a:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
-@media (min-width: 1024px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
+.logout-btn {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+@media (max-width: 740px) {
+  .topbar {
+    height: auto;
+    padding: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 
-  .logo {
-    margin: 0 2rem 0 0;
-  }
-
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
+  .topnav {
+    width: 100%;
     flex-wrap: wrap;
-  }
-
-  nav {
-    text-align: left;
-    margin-left: -1rem;
-    font-size: 1rem;
-
-    padding: 1rem 0;
-    margin-top: 1rem;
   }
 }
 </style>
