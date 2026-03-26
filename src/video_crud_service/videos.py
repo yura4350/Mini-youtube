@@ -5,8 +5,8 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from models import Video
-from database import SessionLocal
+from .models import Video
+from .database import SessionLocal
 
 router = APIRouter(prefix="/videos", tags=["videos"])
 
@@ -37,7 +37,14 @@ async def upload_video(
 ):
     """Upload a video file and store metadata"""
     allowed_types = {"video/mp4", "video/webm", "video/quicktime"}
-    if file.content_type not in allowed_types:
+    allowed_extensions = {".mp4", ".webm", ".mov"}
+    suffix = Path(file.filename).suffix.lower() if file.filename else ""
+
+    is_known_video_mime = file.content_type in allowed_types
+    is_octet_stream_with_video_extension = (
+        file.content_type == "application/octet-stream" and suffix in allowed_extensions
+    )
+    if not (is_known_video_mime or is_octet_stream_with_video_extension):
         raise HTTPException(status_code=400, detail="Unsupported video type")
 
     video_id = str(uuid4())

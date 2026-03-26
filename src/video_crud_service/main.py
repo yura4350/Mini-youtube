@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from videos import router as videos_router
-from database import init_db
+from .videos import router as videos_router
+from .database import init_db
 
 app = FastAPI()
 
