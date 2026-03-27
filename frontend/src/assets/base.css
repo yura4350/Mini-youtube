@@ -1,0 +1,26 @@
+:root {
+  --bg-0: #0f0f0f;
+  --bg-1: #1a1a1a;
+  --text-main: #f3f4f6;
+  --text-muted: #9ca3af;
+  --accent: #dc2626;
+  --accent-soft: #ef4444;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--text-main);
+  background: var(--bg-0);
+  line-height: 1.6;
+  font-family: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
