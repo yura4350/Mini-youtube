@@ -1,0 +1,29 @@
+stages:
+  - test
+
+python_tests:
+  stage: test
+  image: python:3.13-slim
+  script:
+    - pip install -r requirements.txt
+    - pip install pytest
+    - |
+      if find . -type f \( -name 'test*.py' -o -name '*_test.py' \) | grep -q .; then
+        pytest -q
+      else
+        echo "No Python tests found."
+      fi
+
+frontend_checks:
+  stage: test
+  image: node:20-alpine
+  script:
+    - |
+      if [ -f frontend/package.json ]; then
+        cd frontend
+        npm ci
+        npm test --if-present
+        npm run build --if-present
+      else
+        echo "No frontend/package.json found."
+      fi
