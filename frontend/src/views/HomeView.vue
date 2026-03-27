@@ -1,88 +1,189 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import VideoCard from '@/components/VideoCard.vue'
+import AppIcon from '@/components/icons/AppIcon.vue'
+import { categories, mockVideos } from '@/services/mock-videos'
+
+const activeCategory = ref('All')
+const showFilterPanel = ref(false)
+const sortBy = ref<'recommended' | 'latest' | 'popular'>('recommended')
+
+const filteredVideos = computed(() => {
+  if (activeCategory.value === 'All') return mockVideos
+  return mockVideos.filter((video) => video.category === activeCategory.value)
+})
+
+const displayVideos = computed(() => {
+  const list = [...filteredVideos.value]
+
+  if (sortBy.value === 'latest') {
+    return list.sort((a, b) => +new Date(b.uploadDate) - +new Date(a.uploadDate))
+  }
+
+  if (sortBy.value === 'popular') {
+    return list.sort((a, b) => b.views - a.views)
+  }
+
+  return list
+})
+
+function toggleFilterPanel() {
+  showFilterPanel.value = !showFilterPanel.value
+}
+
+function resetFilters() {
+  activeCategory.value = 'All'
+  sortBy.value = 'recommended'
+}
+</script>
+
 <template>
-  <main class="home-shell">
-    <section class="home-hero">
-      <p class="kicker">MEDIA HUB PLATFORM</p>
-      <h1>Build Your YouTube-Style Video Platform</h1>
-      <p>
-        The authentication foundation is ready: login, registration, and profile management. Next,
-        you can move on to feed, upload, and video playback pages.
-      </p>
-      <div class="cta-row">
-        <RouterLink to="/login" class="btn-main">Sign In</RouterLink>
-        <RouterLink to="/register" class="btn-ghost">Create Account</RouterLink>
+  <main class="home-page">
+    <section class="category-row">
+      <button class="chip filter-chip" :class="{ active: showFilterPanel }" @click="toggleFilterPanel">
+        <AppIcon name="filter" :size="14" />
+        Filters
+      </button>
+      <button
+        v-for="category in categories"
+        :key="category"
+        class="chip"
+        :class="{ active: category === activeCategory }"
+        @click="activeCategory = category"
+      >
+        {{ category }}
+      </button>
+    </section>
+
+    <section v-if="showFilterPanel" class="filter-panel">
+      <div class="filter-block">
+        <p>Sort by</p>
+        <div class="mini-row">
+          <button class="mini-chip" :class="{ active: sortBy === 'recommended' }" @click="sortBy = 'recommended'">
+            Recommended
+          </button>
+          <button class="mini-chip" :class="{ active: sortBy === 'latest' }" @click="sortBy = 'latest'">
+            Latest
+          </button>
+          <button class="mini-chip" :class="{ active: sortBy === 'popular' }" @click="sortBy = 'popular'">
+            Most viewed
+          </button>
+        </div>
       </div>
+
+      <div class="filter-block">
+        <p>Category</p>
+        <div class="mini-row">
+          <button
+            v-for="category in categories"
+            :key="`panel-${category}`"
+            class="mini-chip"
+            :class="{ active: category === activeCategory }"
+            @click="activeCategory = category"
+          >
+            {{ category }}
+          </button>
+        </div>
+      </div>
+
+      <button class="reset-btn" @click="resetFilters">Reset filters</button>
+    </section>
+
+    <section class="video-grid">
+      <VideoCard v-for="video in displayVideos" :key="video.id" :video="video" />
     </section>
   </main>
 </template>
 
 <style scoped>
-.home-shell {
-  min-height: calc(100vh - 68px);
-  display: grid;
-  place-items: center;
-  padding: 24px;
+.home-page {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 18px 16px 34px;
 }
 
-.home-hero {
-  max-width: 720px;
-  text-align: center;
-  padding: 34px;
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: linear-gradient(165deg, rgba(220, 38, 38, 0.2), rgba(26, 26, 26, 0.94));
-}
-
-.kicker {
-  color: #f87171;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-}
-
-h1 {
-  margin: 12px 0;
-  font-size: clamp(30px, 5vw, 50px);
-  line-height: 1.1;
-  color: #fff;
-}
-
-p {
-  color: #d6d9e1;
-}
-
-.cta-row {
-  margin-top: 18px;
+.category-row {
   display: flex;
-  justify-content: center;
-  gap: 10px;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
 }
 
-.btn-main,
-.btn-ghost {
-  text-decoration: none;
-  padding: 11px 16px;
-  border-radius: 10px;
-  font-weight: 600;
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #1a1a1a;
+  color: #d2d6df;
+  border-radius: 999px;
+  padding: 8px 12px;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.btn-main {
-  background: linear-gradient(135deg, #dc2626, #ef4444);
+.filter-chip {
+  color: #f2f4f8;
+}
+
+.chip.active {
   color: #fff;
+  border-color: rgba(239, 68, 68, 0.75);
+  background: rgba(220, 38, 38, 0.22);
 }
 
-.btn-ghost {
-  border: 1px solid rgba(255, 255, 255, 0.28);
+.filter-panel {
+  margin-top: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: #141414;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.filter-block p {
+  color: #f2f4f8;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.mini-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mini-chip {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #1a1a1a;
+  color: #d2d6df;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mini-chip.active {
   color: #fff;
+  border-color: rgba(239, 68, 68, 0.75);
+  background: rgba(220, 38, 38, 0.22);
 }
 
-@media (max-width: 740px) {
-  .home-hero {
-    text-align: left;
-  }
+.reset-btn {
+  justify-self: start;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #fff;
+  border-radius: 9px;
+  padding: 7px 11px;
+  cursor: pointer;
+}
 
-  .cta-row {
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
+.video-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
 }
 </style>

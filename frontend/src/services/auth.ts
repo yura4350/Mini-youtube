@@ -114,6 +114,10 @@ function getCurrentUser(): User | null {
   return findUserById(userId)
 }
 
+function getAllUsers(): User[] {
+  return readUsers()
+}
+
 function updateCurrentUser(update: Pick<User, 'username' | 'bio'>): AuthResult {
   const currentUser = getCurrentUser()
   if (!currentUser) {
@@ -152,6 +156,7 @@ export const authService = {
   login,
   register,
   getCurrentUser,
+  getAllUsers,
   updateCurrentUser,
   logout,
 }

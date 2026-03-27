@@ -2,6 +2,7 @@
 import { reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import AppIcon from '@/components/icons/AppIcon.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -51,7 +52,7 @@ async function onSubmit() {
 <template>
   <section class="auth-shell">
     <div class="auth-card">
-      <div class="auth-icon" aria-hidden="true">▶</div>
+      <div class="auth-icon" aria-hidden="true"><AppIcon name="play" :size="22" :stroke-width="2" /></div>
       <p class="brand-mark">MEDIA HUB</p>
       <h1>Create an account</h1>
       <p class="muted">Join the community to upload, subscribe, and engage.</p>

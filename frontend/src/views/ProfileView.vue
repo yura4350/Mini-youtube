@@ -1,31 +1,39 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watchEffect } from 'vue'
+import VideoCard from '@/components/VideoCard.vue'
+import AppIcon from '@/components/icons/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
+import { mockVideos } from '@/services/mock-videos'
 
 const authStore = useAuthStore()
+const tab = ref<'videos' | 'subscriptions' | 'notifications'>('videos')
 const editMode = ref(false)
 const message = ref('')
 
-const profileForm = reactive({
+const form = reactive({
   username: '',
   bio: '',
 })
 
 watchEffect(() => {
   if (!authStore.currentUser) return
-  profileForm.username = authStore.currentUser.username
-  profileForm.bio = authStore.currentUser.bio
+  form.username = authStore.currentUser.username
+  form.bio = authStore.currentUser.bio
 })
 
-const userInitial = computed(() => authStore.currentUser?.username?.charAt(0).toUpperCase() ?? 'U')
+const userVideos = computed(() => {
+  if (!authStore.currentUser) return []
+  return mockVideos.filter((video) => video.authorId === authStore.currentUser?.id)
+})
+
+const subscribedVideos = computed(() => {
+  if (!authStore.currentUser) return []
+  return mockVideos.filter((video) => authStore.currentUser?.subscribedTo.includes(video.authorId))
+})
 
 function saveProfile() {
   message.value = ''
-  const result = authStore.updateProfile({
-    username: profileForm.username,
-    bio: profileForm.bio,
-  })
-
+  const result = authStore.updateProfile({ username: form.username, bio: form.bio })
   if (!result.ok) {
     message.value = result.message
     return
@@ -37,221 +45,251 @@ function saveProfile() {
 </script>
 
 <template>
-  <section class="profile-shell" v-if="authStore.currentUser">
-    <article class="profile-card">
-      <div class="hero-row">
-        <div class="avatar-wrap">
-          <img :src="authStore.currentUser.avatar" :alt="authStore.currentUser.username" />
-          <span>{{ userInitial }}</span>
-        </div>
+  <main v-if="authStore.currentUser" class="profile-page">
+    <section class="profile-header">
+      <img :src="authStore.currentUser.avatar" :alt="authStore.currentUser.username" class="avatar" />
 
-        <div class="hero-text">
-          <h1>{{ authStore.currentUser.username }}</h1>
-          <p class="email">{{ authStore.currentUser.email }}</p>
-          <p class="bio">{{ authStore.currentUser.bio || 'This user has not added a bio yet.' }}</p>
-        </div>
-      </div>
+      <div class="header-main">
+        <h1>{{ authStore.currentUser.username }}</h1>
+        <p class="email">{{ authStore.currentUser.email }}</p>
+        <p class="bio">{{ authStore.currentUser.bio || 'No bio yet.' }}</p>
 
-      <div class="quick-stats">
-        <div>
-          <p class="value">{{ authStore.currentUser.subscribedTo.length }}</p>
-          <p class="label">Subscriptions</p>
-        </div>
-        <div>
-          <p class="value">{{ authStore.currentUser.notifications.length }}</p>
-          <p class="label">Notifications</p>
-        </div>
-        <div>
-          <p class="value">{{ authStore.currentUser.isAdmin ? 'ADMIN' : 'USER' }}</p>
-          <p class="label">Role</p>
+        <div class="stats">
+          <span><AppIcon name="video" :size="14" /> {{ userVideos.length }} videos</span>
+          <span
+            ><AppIcon name="users" :size="14" />
+            {{ authStore.currentUser.subscribedTo.length }} subscriptions</span
+          >
+          <span
+            ><AppIcon name="bell" :size="14" />
+            {{ authStore.currentUser.notifications.length }} notifications</span
+          >
         </div>
       </div>
+    </section>
 
-      <section class="edit-panel">
-        <header>
-          <h2>Account Details</h2>
-          <button v-if="!editMode" class="ghost" @click="editMode = true">Edit</button>
-        </header>
+    <section class="editor">
+      <header>
+        <h2>Profile settings</h2>
+        <button v-if="!editMode" class="ghost" @click="editMode = true">
+          <AppIcon name="user" :size="14" /> Edit profile
+        </button>
+      </header>
 
-        <div v-if="editMode" class="edit-grid">
-          <label>
-            Username
-            <input v-model="profileForm.username" type="text" required />
-          </label>
+      <div v-if="editMode" class="form-grid">
+        <label>
+          Username
+          <input v-model="form.username" type="text" />
+        </label>
 
-          <label>
-            Bio
-            <textarea v-model="profileForm.bio" rows="4" />
-          </label>
+        <label>
+          Bio
+          <textarea v-model="form.bio" rows="3"></textarea>
+        </label>
 
-          <div class="actions">
-            <button @click="saveProfile">Save Changes</button>
-            <button class="ghost" @click="editMode = false">Cancel</button>
-          </div>
+        <div class="actions">
+          <button @click="saveProfile"><AppIcon name="check" :size="14" /> Save</button>
+          <button class="ghost" @click="editMode = false"><AppIcon name="logout" :size="14" /> Cancel</button>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <p v-if="message" class="status">{{ message }}</p>
-    </article>
-  </section>
+    <section class="tabs">
+      <button :class="{ active: tab === 'videos' }" @click="tab = 'videos'">
+        <AppIcon name="video" :size="14" /> My videos
+      </button>
+      <button :class="{ active: tab === 'subscriptions' }" @click="tab = 'subscriptions'">
+        <AppIcon name="users" :size="14" /> Subscriptions
+      </button>
+      <button :class="{ active: tab === 'notifications' }" @click="tab = 'notifications'">
+        <AppIcon name="bell" :size="14" /> Notifications
+      </button>
+    </section>
+
+    <section v-if="tab === 'videos'" class="video-grid">
+      <VideoCard v-for="video in userVideos" :key="video.id" :video="video" />
+      <p v-if="userVideos.length === 0" class="muted">No videos uploaded yet.</p>
+    </section>
+
+    <section v-if="tab === 'subscriptions'" class="video-grid">
+      <VideoCard v-for="video in subscribedVideos" :key="video.id" :video="video" />
+      <p v-if="subscribedVideos.length === 0" class="muted">No subscriptions yet.</p>
+    </section>
+
+    <section v-if="tab === 'notifications'" class="notification-list">
+      <article v-for="item in authStore.currentUser.notifications" :key="item.id" class="notification-item">
+        <p>{{ item.message }}</p>
+        <small>{{ new Date(item.timestamp).toLocaleString() }}</small>
+      </article>
+      <p v-if="authStore.currentUser.notifications.length === 0" class="muted">No notifications yet.</p>
+    </section>
+
+    <p v-if="message" class="ok">{{ message }}</p>
+  </main>
 </template>
 
 <style scoped>
-.profile-shell {
-  min-height: calc(100vh - 68px);
-  padding: 24px;
-}
-
-.profile-card {
-  max-width: 900px;
+.profile-page {
+  max-width: 1320px;
   margin: 0 auto;
-  background: rgba(16, 16, 16, 0.9);
+  padding: 22px 16px 34px;
+}
+
+.profile-header,
+.editor,
+.notification-item {
+  border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 18px;
-  padding: 24px;
+  background: #1a1a1a;
 }
 
-.hero-row {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-  margin-bottom: 20px;
+.profile-header {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 14px;
 }
 
-.avatar-wrap {
-  width: 120px;
-  height: 120px;
+.avatar {
+  width: 110px;
+  height: 110px;
   border-radius: 999px;
-  overflow: hidden;
-  position: relative;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-}
-
-.avatar-wrap img {
-  width: 100%;
-  height: 100%;
   object-fit: cover;
 }
 
-.avatar-wrap span {
-  position: absolute;
-  right: -8px;
-  bottom: -8px;
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background: #ff5a3d;
+h1 {
   color: #fff;
-  font-weight: 700;
-}
-
-.hero-text h1 {
   font-size: 28px;
-  color: #fff;
 }
 
-.email {
-  color: #b8bcc4;
-}
-
+.email,
 .bio {
+  color: #c2c8d2;
+}
+
+.stats {
   margin-top: 8px;
-  color: #e1e4eb;
+  color: #e8ebf2;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 14px;
 }
 
-.quick-stats {
-  margin: 22px 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 12px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+.editor {
+  margin-top: 12px;
+  padding: 14px;
 }
 
-.value {
-  color: #fff;
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.label {
-  color: #a3a8b2;
-  font-size: 13px;
-}
-
-.edit-panel {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 18px;
-}
-
-.edit-panel header {
+.editor header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
 }
 
-.edit-panel h2 {
-  color: #f6f7fb;
+.editor h2 {
+  color: #fff;
   font-size: 18px;
 }
 
-.edit-grid {
+.form-grid {
+  margin-top: 10px;
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 label {
   display: grid;
   gap: 6px;
-  color: #e8e8ea;
+  color: #e9ebef;
   font-size: 14px;
 }
 
 input,
 textarea {
-  width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(8, 8, 8, 0.88);
+  background: #0f0f0f;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: #fff;
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: 9px;
+  padding: 9px 11px;
 }
 
 .actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: none;
-  border-radius: 10px;
-  padding: 10px 14px;
+  border-radius: 9px;
+  padding: 8px 12px;
   color: #fff;
-  background: linear-gradient(135deg, #ff482b, #ff6f39);
-  cursor: pointer;
+  background: linear-gradient(135deg, #dc2626, #ef4444);
 }
 
 button.ghost {
+  border: 1px solid rgba(255, 255, 255, 0.24);
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-.status {
+.tabs {
   margin-top: 14px;
-  color: #99f2a8;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-@media (max-width: 768px) {
-  .hero-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+.tabs button {
+  background: #161616;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #dadde5;
+}
 
-  .quick-stats {
+.tabs button.active {
+  background: rgba(220, 38, 38, 0.2);
+  border-color: rgba(239, 68, 68, 0.75);
+  color: #fff;
+}
+
+.video-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.notification-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.notification-item {
+  padding: 12px;
+}
+
+.notification-item p {
+  color: #eceff5;
+}
+
+.notification-item small {
+  color: #a4aab6;
+}
+
+.muted {
+  color: #a7adba;
+}
+
+.ok {
+  margin-top: 10px;
+  color: #a7f3be;
+}
+
+@media (max-width: 760px) {
+  .profile-header {
     grid-template-columns: 1fr;
   }
 }
