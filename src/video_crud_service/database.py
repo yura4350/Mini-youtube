@@ -1,5 +1,7 @@
 import os
+import time
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -18,5 +20,18 @@ def get_db():
     finally:
         db.close()
 
-def init_db():
-    Base.metadata.create_all(bind=engine)
+def init_db(max_retries: int = 30, retry_delay_seconds: int = 2):
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            Base.metadata.create_all(bind=engine)
+            return
+        except OperationalError as exc:
+            last_error = exc
+            if attempt == max_retries:
+                break
+            time.sleep(retry_delay_seconds)
+
+    raise RuntimeError(
+        f"Database initialization failed after {max_retries} attempts"
+    ) from last_error
