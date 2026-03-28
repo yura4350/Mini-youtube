@@ -1,11 +1,37 @@
 import logging
+import logging.handlers
+import os
+import subprocess
+import time
+from datetime import datetime, timezone
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from src.video_crud_service.database import SessionLocal
+from src.video_crud_service.models import Video
 
 logging.basicConfig(level=logging.INFO)
+_memory_handler = logging.handlers.MemoryHandler(
+    capacity=200,
+    flushLevel=logging.CRITICAL + 1,
+)
+logging.getLogger().addHandler(_memory_handler)
+
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Admin Service")
+
+_start_time = time.time()
+_request_count = 0
+
+
+@app.middleware("http")
+async def count_requests(request, call_next):
+    global _request_count
+    _request_count += 1
+    return await call_next(request)
 
 
 @app.get("/health")
@@ -20,3 +46,82 @@ def get_system_health():
     """Return admin service health status for the admin dashboard."""
     logger.info("System health check requested")
     return {"status": "ok", "service": "admin"}
+
+
+@app.get("/admin/logs")
+def get_logs():
+    """Return recent system logs."""
+    logger.info("Logs requested")
+    return {
+        "logs": [
+            {
+                "timestamp": datetime.fromtimestamp(r.created, tz=timezone.utc).isoformat(),
+                "level": r.levelname,
+                "logger": r.name,
+                "message": r.getMessage(),
+            }
+            for r in _memory_handler.buffer
+        ]
+    }
+
+
+@app.get("/admin/users/count")
+def get_user_count():
+    """Return total and active user counts."""
+    # TODO: implement once user DB is available
+    logger.info("User count requested")
+    return {"total": 0, "active": 0}
+
+
+@app.patch("/admin/users/{user_id}/ban")
+def ban_user(user_id: str):
+    """Ban a user by ID."""
+    # TODO: implement once user DB is available
+    logger.info("Ban requested for user %s", user_id)
+    return {"user_id": user_id, "banned": False}
+
+
+@app.post("/admin/auth/reset")
+def reset_admin_password(email: str):
+    """Trigger a password reset for the given admin email."""
+    # TODO: implement once user DB is available
+    logger.info("Password reset requested for %s", email)
+    return {"email": email, "reset_sent": False}
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@app.delete("/admin/content/{video_id}")
+def delete_content(video_id: str, db: Session = Depends(get_db)):
+    """Delete a video from storage and the database."""
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    file_path = Path(video.path)
+    if file_path.exists():
+        file_path.unlink()
+
+    db.delete(video)
+    db.commit()
+
+    logger.info("Video %s deleted by admin", video_id)
+    return {"video_id": video_id, "deleted": True}
+
+
+@app.get("/admin/metrics")
+def get_metrics():
+    """Return real-time performance and usage metrics."""
+    logger.info("Metrics requested")
+    return {
+        "uptime_seconds": round(time.time() - _start_time, 2),
+        "total_requests": _request_count,
+        "log_entries": len(_memory_handler.buffer),
+        "memory_rss_mb": round(int(subprocess.check_output(["ps", "-o", "rss=", "-p", str(os.getpid())]).decode().strip() or 0) / 1024, 2),
+    }
