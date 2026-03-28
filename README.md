@@ -16,7 +16,9 @@ Hours Spent:
 
 ### Tutorial, LLMs, and other Code used
 
-GitHub Copilot (GPT-5.3-Codex) for setup/debug support.
+- GitHub Copilot (GPT-5.3-Codex) for setup/debug support.
+- Claude Code (Sonnet-4.6) for assistance in implementing `GET /admin/metrics`.
+- Claude Code (Sonnet-4.6) for suggestions on handling logs in admin API. Utilized MemoryHandler as suggested.
 
 ### Resource Attributions
 
