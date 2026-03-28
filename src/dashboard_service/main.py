@@ -58,6 +58,42 @@ def search_suggestions(q: str = Query(..., min_length=1), db: Session = Depends(
     return {"query": q, "suggestions": [row.title for row in rows]}
 
 
+@app.get("/search/history")
+def search_history(user_id: str = Query(...)):
+    """Return recent search queries for a user.
+    TODO: implement once user DB is available.
+    """
+    logger.info("Search history requested for user %s", user_id)
+    return {"user_id": user_id, "history": []}
+
+
+@app.get("/subscriptions/feed")
+def subscriptions_feed(user_id: str = Query(...)):
+    """Return latest videos from channels the user subscribes to, in chronological order.
+    TODO: implement once user DB is available
+    """
+    logger.info("Subscriptions feed requested for user %s", user_id)
+    return {"user_id": user_id, "videos": []}
+
+
+@app.get("/user/history/watched")
+def watched_history(user_id: str = Query(...)):
+    """Return recently watched videos for a user in reverse chronological order.
+    TODO: implement once user DB is available.
+    """
+    logger.info("Watch history requested for user %s", user_id)
+    return {"user_id": user_id, "videos": []}
+
+
+@app.get("/user/notifications")
+def notifications(user_id: str = Query(...)):
+    """Return recent notifications (read/unread) for a user.
+    TODO: implement once user DB is available.
+    """
+    logger.info("Notifications requested for user %s", user_id)
+    return {"user_id": user_id, "notifications": []}
+
+
 @app.get("/dashboard/recommend")
 def recommend(db: Session = Depends(get_db)):
     """Return videos ordered by newest first.
