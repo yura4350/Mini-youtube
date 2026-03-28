@@ -7,7 +7,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 
-SECRET_KEY = "change-this-in-real-project"
+SECRET_KEY = "fc42e6a3e2c0cd478aaea480e41fdcc1d4bb802c7d41fccbff59465f6945f190"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -172,7 +172,7 @@ def update_privacy_settings():
 @app.patch("/user/settings/notifications")
 def update_notification_settings():
     return {"message": "TODO: /user/settings/notifications not implemented yet"}
-    
+
 @app.patch("/user/settings/ui")
 def update_ui_settings():
     return {"message": "TODO: /user/settings/ui not implemented yet"}
