@@ -140,3 +140,43 @@ async def read_users_me(
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+@app.post("/auth/register")
+def register():
+    return {"message": "TODO: /auth/register not implemented yet"}
+
+@app.post("/auth/login")
+def login():
+    return {"message": "TODO: /auth/login not implemented yet"}
+
+@app.post("/auth/logout")
+def logout():
+    return {"message": "TODO: /auth/logout not implemented yet"}
+
+@app.post("/auth/reset-password")
+def reset_password():
+    return {"message": "TODO: /auth/reset-password not implemented yet"}
+
+@app.get("/user/profile/{id}")
+def get_profile(id: str):
+    return {"message": "TODO: /user/profile/{id} not implemented yet", "id": id}
+
+@app.patch("/user/profile/edit")
+def edit_profile():
+    return {"message": "TODO: /user/profile/edit not implemented yet"}
+
+@app.patch("/user/settings/privacy")
+def update_privacy_settings():
+    return {"message": "TODO: /user/settings/privacy not implemented yet"}
+
+@app.patch("/user/settings/notifications")
+def update_notification_settings():
+    return {"message": "TODO: /user/settings/notifications not implemented yet"}
+    
+@app.patch("/user/settings/ui")
+def update_ui_settings():
+    return {"message": "TODO: /user/settings/ui not implemented yet"}
+
+
+
+
