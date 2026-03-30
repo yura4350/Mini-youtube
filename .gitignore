@@ -220,3 +220,7 @@ __marimo__/
 
 # docker artifacts
 postgres_data/
+
+
+#Vue
+frontend/.pnpm-store

@@ -48,5 +48,24 @@ services:
       - "8001:8001"
     command: ["uvicorn", "src.admin_service.main:app", "--host", "0.0.0.0", "--port", "8001"]
 
+  frontend:
+    image: node:20-alpine
+    container_name: media_server_frontend
+    restart: unless-stopped
+    working_dir: /app/frontend
+    depends_on:
+      - api
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+    command:
+      [
+        "sh",
+        "-c",
+        "corepack enable && pnpm install && pnpm dev --host 0.0.0.0 --port 5173",
+      ]
+
 volumes:
   db_data:
