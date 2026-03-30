@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
-import { formatViews } from '@/services/mock-videos'
+import { formatViews } from '@/services/video-format'
 import { fetchVideoById, fetchVideos } from '@/services/videos'
 import type { VideoItem } from '@/types/video'
 
