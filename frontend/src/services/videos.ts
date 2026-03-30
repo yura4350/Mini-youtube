@@ -23,3 +23,47 @@ export async function fetchVideos(): Promise<VideoItem[]> {
   const payload = (await response.json()) as VideoApiItem[]
   return payload.map(mapVideoApiItemToVideoItem)
 }
+
+export async function fetchVideoById(videoId: string): Promise<VideoItem> {
+  const response = await fetch(`${API_BASE_URL}/videos/${videoId}`)
+
+  if (!response.ok) {
+    throw new Error(await parseError(response))
+  }
+
+  const payload = (await response.json()) as VideoApiItem
+  return mapVideoApiItemToVideoItem(payload)
+}
+
+export interface UploadVideoPayload {
+  file: File
+  title: string
+  description: string
+  category: string
+  tags: string
+  uploaderId: number
+  thumbnailUrl?: string
+}
+
+export async function uploadVideo(payload: UploadVideoPayload): Promise<VideoItem> {
+  const formData = new FormData()
+  formData.append('file', payload.file)
+  formData.append('title', payload.title)
+  formData.append('description', payload.description)
+  formData.append('category', payload.category)
+  formData.append('tags', payload.tags)
+  formData.append('uploader_id', String(payload.uploaderId))
+  formData.append('thumbnail_url', payload.thumbnailUrl || '')
+
+  const response = await fetch(`${API_BASE_URL}/videos/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  if (!response.ok) {
+    throw new Error(await parseError(response))
+  }
+
+  const video = (await response.json()) as VideoApiItem
+  return mapVideoApiItemToVideoItem(video)
+}
