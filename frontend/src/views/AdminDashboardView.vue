@@ -1,13 +1,34 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { authService } from '@/services/auth'
 import AppIcon from '@/components/icons/AppIcon.vue'
-import { mockVideos } from '@/services/mock-videos'
+import { fetchVideos } from '@/services/videos'
+import type { VideoItem } from '@/types/video'
 
 const currentUser = computed(() => authService.getCurrentUser())
 const users = computed(() => authService.getAllUsers())
+const videos = ref<VideoItem[]>([])
+const loadingVideos = ref(false)
+const videoError = ref('')
 
-const totalViews = computed(() => mockVideos.reduce((sum, video) => sum + video.views, 0))
+const totalViews = computed(() => videos.value.reduce((sum, video) => sum + video.views, 0))
+
+async function loadVideos() {
+  loadingVideos.value = true
+  videoError.value = ''
+
+  try {
+    videos.value = await fetchVideos()
+  } catch (error) {
+    videoError.value = error instanceof Error ? error.message : 'Failed to load video metrics.'
+  } finally {
+    loadingVideos.value = false
+  }
+}
+
+onMounted(() => {
+  loadVideos()
+})
 </script>
 
 <template>
@@ -24,11 +45,19 @@ const totalViews = computed(() => mockVideos.reduce((sum, video) => sum + video.
       </article>
       <article class="metric">
         <p class="label"><AppIcon name="video" :size="14" /> Total videos</p>
-        <p class="value">{{ mockVideos.length }}</p>
+        <p class="value">{{ videos.length }}</p>
       </article>
       <article class="metric">
         <p class="label"><AppIcon name="views" :size="14" /> Total views</p>
         <p class="value">{{ totalViews.toLocaleString() }}</p>
+      </article>
+
+      <article v-if="loadingVideos" class="metric status">
+        <p class="label">Loading video metrics...</p>
+      </article>
+
+      <article v-else-if="videoError" class="metric status">
+        <p class="label">{{ videoError }}</p>
       </article>
     </section>
   </main>
@@ -47,6 +76,10 @@ const totalViews = computed(() => mockVideos.reduce((sum, video) => sum + video.
   border-radius: 14px;
   background: #1a1a1a;
   padding: 16px;
+}
+
+.status {
+  grid-column: 1 / -1;
 }
 
 .admin-card h1 {
