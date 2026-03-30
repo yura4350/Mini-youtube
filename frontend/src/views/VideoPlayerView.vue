@@ -1,30 +1,87 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
-import { formatViews, mockVideos } from '@/services/mock-videos'
+import { formatViews } from '@/services/mock-videos'
+import { fetchVideoById, fetchVideos } from '@/services/videos'
+import type { VideoItem } from '@/types/video'
 
 const route = useRoute()
 
-const currentVideo = computed(() => mockVideos.find((item) => item.id === String(route.params.id)) || null)
+const currentVideo = ref<VideoItem | null>(null)
+const allVideos = ref<VideoItem[]>([])
+const loading = ref(false)
+const errorMessage = ref('')
+
+const playbackUrl = computed(() => {
+  if (!currentVideo.value) return ''
+
+  const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
+  const url = currentVideo.value.videoUrl
+
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url
+  }
+
+  return `${apiBaseUrl}${url}`
+})
+
+async function loadCurrentVideo() {
+  const videoId = String(route.params.id)
+  if (!videoId) {
+    currentVideo.value = null
+    return
+  }
+
+  loading.value = true
+  errorMessage.value = ''
+
+  try {
+    const [video, videos] = await Promise.all([fetchVideoById(videoId), fetchVideos()])
+    currentVideo.value = video
+    allVideos.value = videos
+  } catch (error) {
+    currentVideo.value = null
+    errorMessage.value = error instanceof Error ? error.message : 'Failed to load video.'
+  } finally {
+    loading.value = false
+  }
+}
 
 const relatedVideos = computed(() => {
   if (!currentVideo.value) return []
-  return mockVideos
+  return allVideos.value
     .filter((item) => item.id !== currentVideo.value?.id)
     .filter((item) => {
       return item.category === currentVideo.value?.category || item.tags.some((tag) => currentVideo.value?.tags.includes(tag))
     })
     .slice(0, 6)
 })
+
+onMounted(() => {
+  loadCurrentVideo()
+})
+
+watch(
+  () => route.params.id,
+  () => {
+    loadCurrentVideo()
+  },
+)
 </script>
 
 <template>
+  <main v-if="loading" class="watch-page">
+    <section class="channel-card">
+      <p>Loading video...</p>
+    </section>
+  </main>
+
   <main v-if="currentVideo" class="watch-page">
     <section class="main-col">
       <div class="player-wrap">
-        <img :src="currentVideo.thumbnail" :alt="currentVideo.title" />
+        <video :src="playbackUrl" :poster="currentVideo.thumbnail" controls preload="metadata" />
       </div>
 
       <h1>{{ currentVideo.title }}</h1>
@@ -53,7 +110,7 @@ const relatedVideos = computed(() => {
 
   <main v-else class="watch-page">
     <section class="channel-card">
-      <p>Video not found.</p>
+      <p>{{ errorMessage || 'Video not found.' }}</p>
     </section>
   </main>
 </template>
@@ -75,7 +132,7 @@ const relatedVideos = computed(() => {
   background: #000;
 }
 
-.player-wrap img {
+.player-wrap video {
   width: 100%;
   height: 100%;
   object-fit: cover;
