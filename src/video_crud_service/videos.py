@@ -2,7 +2,7 @@ from pathlib import Path
 import subprocess
 from uuid import uuid4
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -207,12 +207,16 @@ def update_video(
     description: str = Form(None),
     category: str = Form(None),
     tags: str = Form(None),
+    requester_uploader_id: int = Form(...),
     db: Session = Depends(get_db)
 ):
     """Update video metadata (title, description, category, tags)"""
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+
+    if requester_uploader_id != video.uploader_id:
+        raise HTTPException(status_code=403, detail="You do not own this video")
     
     # Update only provided fields
     if title is not None:
@@ -232,11 +236,18 @@ def update_video(
 
 
 @router.delete("/{video_id}")
-def delete_video(video_id: str, db: Session = Depends(get_db)):
+def delete_video(
+    video_id: str,
+    requester_uploader_id: int = Query(...),
+    db: Session = Depends(get_db),
+):
     """Delete video file and metadata"""
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+
+    if requester_uploader_id != video.uploader_id:
+        raise HTTPException(status_code=403, detail="You do not own this video")
 
     file_path = Path(video.path)
     
