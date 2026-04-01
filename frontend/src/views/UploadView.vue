@@ -9,6 +9,7 @@ const loading = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
 const selectedFile = ref<File | null>(null)
+const videoDuration = ref<number>(0)
 
 const form = reactive({
   title: '',
@@ -19,7 +20,20 @@ const form = reactive({
 
 function onFileChange(event: Event) {
   const target = event.target as HTMLInputElement
-  selectedFile.value = target.files?.[0] || null
+  const file = target.files?.[0] || null
+  selectedFile.value = file
+  
+  if (file) {
+    // Extract duration from video file metadata
+    const video = document.createElement('video')
+    video.src = URL.createObjectURL(file)
+    video.onloadedmetadata = () => {
+      videoDuration.value = Math.round(video.duration)
+      URL.revokeObjectURL(video.src)
+    }
+  } else {
+    videoDuration.value = 0
+  }
 }
 
 async function onSubmit() {
@@ -47,6 +61,7 @@ async function onSubmit() {
       category: form.category,
       tags: form.tags,
       uploaderId,
+      durationSeconds: videoDuration.value,
     })
 
     successMessage.value = `Uploaded "${created.title}" successfully.`

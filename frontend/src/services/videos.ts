@@ -43,6 +43,7 @@ export interface UploadVideoPayload {
   tags: string
   uploaderId: number
   thumbnailUrl?: string
+  durationSeconds?: number
 }
 
 export async function uploadVideo(payload: UploadVideoPayload): Promise<VideoItem> {
@@ -54,6 +55,7 @@ export async function uploadVideo(payload: UploadVideoPayload): Promise<VideoIte
   formData.append('tags', payload.tags)
   formData.append('uploader_id', String(payload.uploaderId))
   formData.append('thumbnail_url', payload.thumbnailUrl || '')
+  formData.append('duration_seconds', String(payload.durationSeconds || 0))
 
   const response = await fetch(`${API_BASE_URL}/videos/upload`, {
     method: 'POST',
