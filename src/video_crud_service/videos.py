@@ -200,6 +200,37 @@ def get_video_thumbnail(video_id: str, db: Session = Depends(get_db)):
     return FileResponse(path=str(thumbnail_path), media_type="image/jpeg", filename=thumbnail_path.name)
 
 
+@router.patch("/{video_id}")
+def update_video(
+    video_id: str,
+    title: str = Form(None),
+    description: str = Form(None),
+    category: str = Form(None),
+    tags: str = Form(None),
+    db: Session = Depends(get_db)
+):
+    """Update video metadata (title, description, category, tags)"""
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    # Update only provided fields
+    if title is not None:
+        video.title = title
+    if description is not None:
+        video.description = description
+    if category is not None:
+        video.category = category
+    if tags is not None:
+        video.tags = tags
+    
+    db.commit()
+    db.refresh(video)
+    
+    return serialize_video(video)
+
+
+
 @router.delete("/{video_id}")
 def delete_video(video_id: str, db: Session = Depends(get_db)):
     """Delete video file and metadata"""
@@ -208,14 +239,17 @@ def delete_video(video_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Video not found")
 
     file_path = Path(video.path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Stored file not found")
-
+    
+    # Try to delete the video file, but don't fail if it's already gone
+    if file_path.exists():
+        file_path.unlink()
+    
+    # Clean up thumbnail
     thumbnail_path = _thumbnail_path(video_id)
-
-    file_path.unlink()
     if thumbnail_path.exists():
         thumbnail_path.unlink()
+    
+    # Remove from database
     db.delete(video)
     db.commit()
 

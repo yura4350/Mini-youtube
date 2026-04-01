@@ -69,3 +69,41 @@ export async function uploadVideo(payload: UploadVideoPayload): Promise<VideoIte
   const video = (await response.json()) as VideoApiItem
   return mapVideoApiItemToVideoItem(video)
 }
+
+export interface UpdateVideoPayload {
+  videoId: string
+  title?: string
+  description?: string
+  category?: string
+  tags?: string
+}
+
+export async function updateVideo(payload: UpdateVideoPayload): Promise<VideoItem> {
+  const formData = new FormData()
+  if (payload.title !== undefined) formData.append('title', payload.title)
+  if (payload.description !== undefined) formData.append('description', payload.description)
+  if (payload.category !== undefined) formData.append('category', payload.category)
+  if (payload.tags !== undefined) formData.append('tags', payload.tags)
+
+  const response = await fetch(`${API_BASE_URL}/videos/${payload.videoId}`, {
+    method: 'PATCH',
+    body: formData,
+  })
+
+  if (!response.ok) {
+    throw new Error(await parseError(response))
+  }
+
+  const video = (await response.json()) as VideoApiItem
+  return mapVideoApiItemToVideoItem(video)
+}
+
+export async function deleteVideo(videoId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/videos/${videoId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    throw new Error(await parseError(response))
+  }
+}
