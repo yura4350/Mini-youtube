@@ -166,10 +166,10 @@ watch(
       </p>
       <div class="actions" v-if="isOwner">
         <button v-if="!isEditing" @click="startEditing" class="btn-edit">
-          <AppIcon name="edit" :size="14" /> Edit
+          <AppIcon name="video" :size="14" /> Edit
         </button>
         <button v-if="!isEditing" @click="onDelete" :disabled="isDeleting" class="btn-delete">
-          <AppIcon name="delete" :size="14" /> {{ isDeleting ? 'Deleting...' : 'Delete' }}
+          <AppIcon name="empty" :size="14" /> {{ isDeleting ? 'Deleting...' : 'Delete' }}
         </button>
       </div>
 
