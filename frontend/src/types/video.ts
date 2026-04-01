@@ -37,6 +37,7 @@ export interface VideoApiItem {
 
 const DEFAULT_THUMBNAIL =
   'https://images.unsplash.com/photo-1492619375914-88005aa9e8fb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080'
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
 
 function formatDuration(totalSeconds: number): string {
   if (totalSeconds <= 0) return '00:00'
@@ -47,12 +48,15 @@ function formatDuration(totalSeconds: number): string {
 
 export function mapVideoApiItemToVideoItem(video: VideoApiItem): VideoItem {
   const createdAt = video.created_at || new Date().toISOString()
+  const thumbnailUrl = video.thumbnail_url.startsWith('http')
+    ? video.thumbnail_url
+    : `${API_BASE_URL}${video.thumbnail_url}`
 
   return {
     id: video.id,
     title: video.title,
     description: video.description,
-    thumbnail: video.thumbnail_url || DEFAULT_THUMBNAIL,
+    thumbnail: video.thumbnail_url ? thumbnailUrl : DEFAULT_THUMBNAIL,
     videoUrl: video.playback_url,
     authorId: String(video.uploader_id),
     authorName: `Uploader ${video.uploader_id}`,

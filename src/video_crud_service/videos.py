@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
@@ -12,10 +13,39 @@ router = APIRouter(prefix="/videos", tags=["videos"])
 
 UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+THUMBNAIL_DIR = UPLOAD_DIR / "thumbnails"
+THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _split_tags(tags: str) -> list[str]:
     return [tag.strip() for tag in tags.split(",") if tag.strip()]
+
+
+def _thumbnail_path(video_id: str) -> Path:
+    return THUMBNAIL_DIR / f"{video_id}.jpg"
+
+
+def _generate_first_frame_thumbnail(video_path: Path, thumbnail_path: Path) -> bool:
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(video_path),
+                "-vf",
+                "select=eq(n\\,0)",
+                "-vframes",
+                "1",
+                str(thumbnail_path),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
 
 
 def serialize_video(video: Video) -> dict:
@@ -25,7 +55,7 @@ def serialize_video(video: Video) -> dict:
         "description": video.description,
         "category": video.category,
         "tags": _split_tags(video.tags),
-        "thumbnail_url": video.thumbnail_url,
+        "thumbnail_url": f"/videos/{video.id}/thumbnail",
         "uploader_id": video.uploader_id,
         "original_filename": video.original_filename,
         "saved_filename": video.saved_filename,
@@ -88,6 +118,9 @@ async def upload_video(
     content = await file.read()
     saved_path.write_bytes(content)
 
+    generated = _generate_first_frame_thumbnail(saved_path, _thumbnail_path(video_id))
+    resolved_thumbnail_url = f"/videos/{video_id}/thumbnail" if generated else thumbnail_url
+
     # Save to database
     video = Video(
         id=video_id,
@@ -95,7 +128,7 @@ async def upload_video(
         description=description,
         category=category,
         tags=tags,
-        thumbnail_url=thumbnail_url,
+        thumbnail_url=resolved_thumbnail_url,
         uploader_id=uploader_id,
         original_filename=file.filename,
         saved_filename=saved_name,
@@ -147,6 +180,26 @@ def play_video(video_id: str, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/{video_id}/thumbnail")
+def get_video_thumbnail(video_id: str, db: Session = Depends(get_db)):
+    """Serve thumbnail generated from frame 1 of the video."""
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    video_path = Path(video.path)
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Stored file not found")
+
+    thumbnail_path = _thumbnail_path(video_id)
+    if not thumbnail_path.exists():
+        generated = _generate_first_frame_thumbnail(video_path, thumbnail_path)
+        if not generated:
+            raise HTTPException(status_code=404, detail="Thumbnail not available")
+
+    return FileResponse(path=str(thumbnail_path), media_type="image/jpeg", filename=thumbnail_path.name)
+
+
 @router.delete("/{video_id}")
 def delete_video(video_id: str, db: Session = Depends(get_db)):
     """Delete video file and metadata"""
@@ -158,7 +211,11 @@ def delete_video(video_id: str, db: Session = Depends(get_db)):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Stored file not found")
 
+    thumbnail_path = _thumbnail_path(video_id)
+
     file_path.unlink()
+    if thumbnail_path.exists():
+        thumbnail_path.unlink()
     db.delete(video)
     db.commit()
 
