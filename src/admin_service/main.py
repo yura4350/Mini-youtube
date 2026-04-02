@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from src.video_crud_service.database import SessionLocal
@@ -22,6 +23,14 @@ logging.getLogger().addHandler(_memory_handler)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Admin Service")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://vcm-52409.vm.duke.edu:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 _start_time = time.time()
 _request_count = 0

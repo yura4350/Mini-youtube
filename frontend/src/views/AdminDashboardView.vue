@@ -5,7 +5,7 @@ import AppIcon from "@/components/icons/AppIcon.vue";
 import { fetchVideos } from "@/services/videos";
 import type { VideoItem } from "@/types/video";
 
-const ADMIN_API = "http://localhost:8001";
+const ADMIN_API = import.meta.env.VITE_ADMIN_API ?? "http://localhost:8001";
 
 interface LogEntry {
   timestamp: string;
