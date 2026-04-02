@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
+import { useAuthStore } from '@/stores/auth'
+import { uploadVideo } from '@/services/videos'
 
+const authStore = useAuthStore()
 const loading = ref(false)
 const successMessage = ref('')
+const errorMessage = ref('')
+const selectedFile = ref<File | null>(null)
+const videoDuration = ref<number>(0)
 
 const form = reactive({
   title: '',
@@ -12,12 +18,63 @@ const form = reactive({
   tags: '',
 })
 
+function onFileChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0] || null
+  selectedFile.value = file
+  
+  if (file) {
+    // Extract duration from video file metadata
+    const video = document.createElement('video')
+    video.src = URL.createObjectURL(file)
+    video.onloadedmetadata = () => {
+      videoDuration.value = Math.round(video.duration)
+      URL.revokeObjectURL(video.src)
+    }
+  } else {
+    videoDuration.value = 0
+  }
+}
+
 async function onSubmit() {
+  errorMessage.value = ''
   successMessage.value = ''
+
+  if (!selectedFile.value) {
+    errorMessage.value = 'Please choose a video file.'
+    return
+  }
+
+  const uploaderId = Number(authStore.currentUser?.id)
+  if (!Number.isInteger(uploaderId) || uploaderId <= 0) {
+    errorMessage.value = 'Current user id is not compatible with upload API.'
+    return
+  }
+
   loading.value = true
-  await new Promise((resolve) => setTimeout(resolve, 700))
-  loading.value = false
-  successMessage.value = 'Upload draft submitted. Backend integration is the next step.'
+
+  try {
+    const created = await uploadVideo({
+      file: selectedFile.value,
+      title: form.title,
+      description: form.description,
+      category: form.category,
+      tags: form.tags,
+      uploaderId,
+      durationSeconds: videoDuration.value,
+    })
+
+    successMessage.value = `Uploaded "${created.title}" successfully.`
+    form.title = ''
+    form.description = ''
+    form.category = 'Education'
+    form.tags = ''
+    selectedFile.value = null
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Upload failed.'
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -25,9 +82,14 @@ async function onSubmit() {
   <main class="upload-page">
     <section class="upload-card">
       <h1><AppIcon name="upload" :size="22" /> Upload video</h1>
-      <p class="sub">Match the Figma flow for creator upload. API integration can be plugged in directly.</p>
+      <p class="sub">Upload a video file and metadata to the Video CRUD service.</p>
 
       <form class="form" @submit.prevent="onSubmit">
+        <label>
+          Video file
+          <input type="file" accept="video/*,.mp4,.webm,.mov" @change="onFileChange" required />
+        </label>
+
         <label>
           Title
           <input v-model="form.title" type="text" placeholder="Enter video title" required />
@@ -57,9 +119,13 @@ async function onSubmit() {
         </label>
 
         <button :disabled="loading" type="submit">
-          <AppIcon name="upload" :size="15" /> {{ loading ? 'Submitting...' : 'Submit Upload' }}
+          <AppIcon name="upload" :size="15" /> {{ loading ? 'Uploading...' : 'Upload Video' }}
         </button>
       </form>
+
+      <p v-if="errorMessage" class="error">
+        {{ errorMessage }}
+      </p>
 
       <p v-if="successMessage" class="ok">
         <AppIcon name="check" :size="15" /> {{ successMessage }}
@@ -138,5 +204,10 @@ button {
   gap: 6px;
   margin-top: 12px;
   color: #9ff0b1;
+}
+
+.error {
+  margin-top: 12px;
+  color: #ff9f8b;
 }
 </style>

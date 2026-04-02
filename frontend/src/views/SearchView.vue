@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import VideoCard from '@/components/VideoCard.vue'
-import { mockVideos } from '@/services/mock-videos'
+import { fetchVideos } from '@/services/videos'
+import type { VideoItem } from '@/types/video'
 
 const route = useRoute()
+const videos = ref<VideoItem[]>([])
+const loading = ref(false)
+const errorMessage = ref('')
 
 const query = computed(() => String(route.query.q || '').trim())
 
 const results = computed(() => {
   if (!query.value) return []
   const q = query.value.toLowerCase()
-  return mockVideos.filter((video) => {
+  return videos.value.filter((video) => {
     return (
       video.title.toLowerCase().includes(q) ||
       video.description.toLowerCase().includes(q) ||
@@ -21,6 +25,23 @@ const results = computed(() => {
       video.tags.some((tag) => tag.toLowerCase().includes(q))
     )
   })
+})
+
+async function loadVideos() {
+  loading.value = true
+  errorMessage.value = ''
+
+  try {
+    videos.value = await fetchVideos()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Failed to load videos'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  loadVideos()
 })
 </script>
 
@@ -31,7 +52,15 @@ const results = computed(() => {
       <p>{{ results.length }} videos found</p>
     </header>
 
-    <section v-if="results.length > 0" class="video-grid">
+    <section v-if="loading" class="status-box">
+      <p>Loading videos...</p>
+    </section>
+
+    <section v-else-if="errorMessage" class="status-box">
+      <p>{{ errorMessage }}</p>
+    </section>
+
+    <section v-else-if="results.length > 0" class="video-grid">
       <VideoCard v-for="video in results" :key="video.id" :video="video" />
     </section>
 
@@ -66,6 +95,18 @@ const results = computed(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 18px;
+}
+
+.status-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 20px;
+  color: #c2c7d0;
+  background: #1a1a1a;
 }
 
 .empty-state {
