@@ -1,7 +1,8 @@
 from pathlib import Path
+import subprocess
 from uuid import uuid4
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,61 @@ router = APIRouter(prefix="/videos", tags=["videos"])
 
 UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+THUMBNAIL_DIR = UPLOAD_DIR / "thumbnails"
+THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _split_tags(tags: str) -> list[str]:
+    return [tag.strip() for tag in tags.split(",") if tag.strip()]
+
+
+def _thumbnail_path(video_id: str) -> Path:
+    return THUMBNAIL_DIR / f"{video_id}.jpg"
+
+
+def _generate_first_frame_thumbnail(video_path: Path, thumbnail_path: Path) -> bool:
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(video_path),
+                "-vf",
+                "select=eq(n\\,0)",
+                "-vframes",
+                "1",
+                str(thumbnail_path),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
+def serialize_video(video: Video) -> dict:
+    return {
+        "id": video.id,
+        "title": video.title,
+        "description": video.description,
+        "category": video.category,
+        "tags": _split_tags(video.tags),
+        "thumbnail_url": f"/videos/{video.id}/thumbnail",
+        "uploader_id": video.uploader_id,
+        "original_filename": video.original_filename,
+        "saved_filename": video.saved_filename,
+        "content_type": video.content_type,
+        "size": video.size,
+        "path": video.path,
+        "views": video.views,
+        "likes": video.likes,
+        "duration_seconds": video.duration_seconds,
+        "playback_url": f"/videos/{video.id}/play",
+        "created_at": video.created_at.isoformat() if video.created_at else None,
+    }
 
 
 def get_db():
@@ -32,6 +88,13 @@ def ping_videos():
 async def upload_video(
     file: UploadFile = File(...),
     title: str = Form(...),
+    description: str = Form(""),
+    category: str = Form("Education"),
+    tags: str = Form(""),
+    thumbnail_url: str = Form(""),
+    views: int = Form(0),
+    likes: int = Form(0),
+    duration_seconds: int = Form(0),
     uploader_id: int = Form(...),
     db: Session = Depends(get_db)
 ):
@@ -55,38 +118,39 @@ async def upload_video(
     content = await file.read()
     saved_path.write_bytes(content)
 
+    generated = _generate_first_frame_thumbnail(saved_path, _thumbnail_path(video_id))
+    resolved_thumbnail_url = f"/videos/{video_id}/thumbnail" if generated else thumbnail_url
+
     # Save to database
     video = Video(
         id=video_id,
         title=title,
+        description=description,
+        category=category,
+        tags=tags,
+        thumbnail_url=resolved_thumbnail_url,
         uploader_id=uploader_id,
         original_filename=file.filename,
         saved_filename=saved_name,
         content_type=file.content_type,
         size=len(content),
         path=str(saved_path),
+        views=max(views, 0),
+        likes=max(likes, 0),
+        duration_seconds=max(duration_seconds, 0),
     )
     db.add(video)
     db.commit()
     db.refresh(video)
 
-    return {
-        "id": video.id,
-        "title": video.title,
-        "uploader_id": video.uploader_id,
-        "original_filename": video.original_filename,
-        "saved_filename": video.saved_filename,
-        "content_type": video.content_type,
-        "size": video.size,
-        "path": video.path,
-    }
+    return serialize_video(video)
 
 
 @router.get("")
 def get_all_videos(db: Session = Depends(get_db)):
     """List all uploaded videos"""
     videos = db.query(Video).all()
-    return videos
+    return [serialize_video(video) for video in videos]
 
 
 @router.get("/{video_id}")
@@ -95,7 +159,7 @@ def get_video(video_id: str, db: Session = Depends(get_db)):
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
-    return video
+    return serialize_video(video)
 
 
 @router.get("/{video_id}/play")
@@ -116,18 +180,87 @@ def play_video(video_id: str, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/{video_id}/thumbnail")
+def get_video_thumbnail(video_id: str, db: Session = Depends(get_db)):
+    """Serve thumbnail generated from frame 1 of the video."""
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    video_path = Path(video.path)
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Stored file not found")
+
+    thumbnail_path = _thumbnail_path(video_id)
+    if not thumbnail_path.exists():
+        generated = _generate_first_frame_thumbnail(video_path, thumbnail_path)
+        if not generated:
+            raise HTTPException(status_code=404, detail="Thumbnail not available")
+
+    return FileResponse(path=str(thumbnail_path), media_type="image/jpeg", filename=thumbnail_path.name)
+
+
+@router.patch("/{video_id}")
+def update_video(
+    video_id: str,
+    title: str = Form(None),
+    description: str = Form(None),
+    category: str = Form(None),
+    tags: str = Form(None),
+    requester_uploader_id: int = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Update video metadata (title, description, category, tags)"""
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    if requester_uploader_id != video.uploader_id:
+        raise HTTPException(status_code=403, detail="You do not own this video")
+    
+    # Update only provided fields
+    if title is not None:
+        video.title = title
+    if description is not None:
+        video.description = description
+    if category is not None:
+        video.category = category
+    if tags is not None:
+        video.tags = tags
+    
+    db.commit()
+    db.refresh(video)
+    
+    return serialize_video(video)
+
+
+
 @router.delete("/{video_id}")
-def delete_video(video_id: str, db: Session = Depends(get_db)):
+def delete_video(
+    video_id: str,
+    requester_uploader_id: int = Query(...),
+    db: Session = Depends(get_db),
+):
     """Delete video file and metadata"""
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    file_path = Path(video.path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Stored file not found")
+    if requester_uploader_id != video.uploader_id:
+        raise HTTPException(status_code=403, detail="You do not own this video")
 
-    file_path.unlink()
+    file_path = Path(video.path)
+    
+    # Try to delete the video file, but don't fail if it's already gone
+    if file_path.exists():
+        file_path.unlink()
+    
+    # Clean up thumbnail
+    thumbnail_path = _thumbnail_path(video_id)
+    if thumbnail_path.exists():
+        thumbnail_path.unlink()
+    
+    # Remove from database
     db.delete(video)
     db.commit()
 

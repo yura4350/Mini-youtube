@@ -1,16 +1,25 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import type { VideoItem } from '@/types/video'
 import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
-import { categories, mockVideos } from '@/services/mock-videos'
+import { fetchVideos } from '@/services/videos'
 
 const activeCategory = ref('All')
 const showFilterPanel = ref(false)
 const sortBy = ref<'recommended' | 'latest' | 'popular'>('recommended')
+const loading = ref(false)
+const errorMessage = ref('')
+const videos = ref<VideoItem[]>([])
+
+const categories = computed(() => {
+  const unique = new Set(videos.value.map((video) => video.category).filter(Boolean))
+  return ['All', ...Array.from(unique).sort((a, b) => a.localeCompare(b))]
+})
 
 const filteredVideos = computed(() => {
-  if (activeCategory.value === 'All') return mockVideos
-  return mockVideos.filter((video) => video.category === activeCategory.value)
+  if (activeCategory.value === 'All') return videos.value
+  return videos.value.filter((video) => video.category === activeCategory.value)
 })
 
 const displayVideos = computed(() => {
@@ -35,6 +44,23 @@ function resetFilters() {
   activeCategory.value = 'All'
   sortBy.value = 'recommended'
 }
+
+async function loadVideos() {
+  loading.value = true
+  errorMessage.value = ''
+
+  try {
+    videos.value = await fetchVideos()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Failed to load videos'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  loadVideos()
+})
 </script>
 
 <template>
@@ -89,7 +115,16 @@ function resetFilters() {
       <button class="reset-btn" @click="resetFilters">Reset filters</button>
     </section>
 
-    <section class="video-grid">
+    <section v-if="loading" class="status-box">Loading videos...</section>
+
+    <section v-else-if="errorMessage" class="status-box error-box">
+      <p>{{ errorMessage }}</p>
+      <button class="retry-btn" @click="loadVideos">Try again</button>
+    </section>
+
+    <section v-else-if="displayVideos.length === 0" class="status-box">No videos available yet.</section>
+
+    <section v-else class="video-grid">
       <VideoCard v-for="video in displayVideos" :key="video.id" :video="video" />
     </section>
   </main>
@@ -185,5 +220,30 @@ function resetFilters() {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 18px;
+}
+
+.status-box {
+  margin-top: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: #1a1a1a;
+  color: #d9dde5;
+  padding: 14px;
+}
+
+.error-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.retry-btn {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #fff;
+  border-radius: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
 }
 </style>

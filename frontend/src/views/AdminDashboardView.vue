@@ -1,9 +1,37 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from "vue";
+import { computed, onMounted, ref, ref, onMounted, onUnmounted } from "vue";
 import { authService } from "@/services/auth";
 import AppIcon from "@/components/icons/AppIcon.vue";
-import { mockVideos } from "@/services/mock-videos";
+import { fetchVideos } from "@/services/videos";
+import type { VideoItem } from "@/types/video";
 
+const currentUser = computed(() => authService.getCurrentUser());
+const users = computed(() => authService.getAllUsers());
+const videos = ref<VideoItem[]>([]);
+const loadingVideos = ref(false);
+const videoError = ref("");
+
+const totalViews = computed(() =>
+  videos.value.reduce((sum, video) => sum + video.views, 0),
+);
+
+async function loadVideos() {
+  loadingVideos.value = true;
+  videoError.value = "";
+
+  try {
+    videos.value = await fetchVideos();
+  } catch (error) {
+    videoError.value =
+      error instanceof Error ? error.message : "Failed to load video metrics.";
+  } finally {
+    loadingVideos.value = false;
+  }
+}
+
+onMounted(() => {
+  loadVideos();
+});
 const ADMIN_API = "http://localhost:8001";
 
 interface LogEntry {
@@ -51,9 +79,12 @@ async function banUser() {
   banLoading.value = true;
   banResult.value = null;
   try {
-    const res = await fetch(`${ADMIN_API}/admin/users/${encodeURIComponent(banUserId.value.trim())}/ban`, {
-      method: "PATCH",
-    });
+    const res = await fetch(
+      `${ADMIN_API}/admin/users/${encodeURIComponent(banUserId.value.trim())}/ban`,
+      {
+        method: "PATCH",
+      },
+    );
     const data = await res.json();
     banResult.value = res.ok
       ? { ok: true, message: `User "${data.user_id}" ban status updated.` }
@@ -84,7 +115,10 @@ async function resetPassword() {
       ? { ok: true, message: `Password reset triggered for "${data.email}".` }
       : { ok: false, message: data.detail ?? "Reset request failed." };
   } catch {
-    resetResult.value = { ok: false, message: "Could not reach admin service." };
+    resetResult.value = {
+      ok: false,
+      message: "Could not reach admin service.",
+    };
   } finally {
     resetLoading.value = false;
   }
@@ -110,7 +144,10 @@ async function deleteContent() {
       : { ok: false, message: data.detail ?? "Delete request failed." };
     if (res.ok) deleteVideoId.value = "";
   } catch {
-    deleteResult.value = { ok: false, message: "Could not reach admin service." };
+    deleteResult.value = {
+      ok: false,
+      message: "Could not reach admin service.",
+    };
   } finally {
     deleteLoading.value = false;
   }
@@ -131,7 +168,8 @@ async function fetchLogs() {
       fetch(`${ADMIN_API}/admin/users/count`),
     ]);
     if (!logsRes.ok) throw new Error(`Logs request failed: ${logsRes.status}`);
-    if (!metricsRes.ok) throw new Error(`Metrics request failed: ${metricsRes.status}`);
+    if (!metricsRes.ok)
+      throw new Error(`Metrics request failed: ${metricsRes.status}`);
     const logsData = await logsRes.json();
     apiMetrics.value = await metricsRes.json();
     logs.value = logsData.logs ?? [];
@@ -182,7 +220,7 @@ onUnmounted(() => {
       <section class="admin-grid">
         <article class="metric">
           <p class="label"><AppIcon name="video" :size="14" /> Total videos</p>
-          <p class="value">{{ mockVideos.length }}</p>
+          <p class="value">{{ videos.length }}</p>
         </article>
         <article class="metric">
           <p class="label"><AppIcon name="views" :size="14" /> Total views</p>
@@ -231,11 +269,19 @@ onUnmounted(() => {
               placeholder="User ID"
               @keyup.enter="banUser"
             />
-            <button class="action-btn action-btn--danger" :disabled="banLoading || !banUserId.trim()" @click="banUser">
+            <button
+              class="action-btn action-btn--danger"
+              :disabled="banLoading || !banUserId.trim()"
+              @click="banUser"
+            >
               {{ banLoading ? "Banning…" : "Ban" }}
             </button>
           </div>
-          <p v-if="banResult" class="action-result" :class="banResult.ok ? 'result--ok' : 'result--err'">
+          <p
+            v-if="banResult"
+            class="action-result"
+            :class="banResult.ok ? 'result--ok' : 'result--err'"
+          >
             {{ banResult.message }}
           </p>
         </div>
@@ -243,7 +289,9 @@ onUnmounted(() => {
         <!-- Password reset -->
         <div class="action-card">
           <h2 class="section-title">Reset Password</h2>
-          <p class="action-desc">Trigger a password reset email for an admin account.</p>
+          <p class="action-desc">
+            Trigger a password reset email for an admin account.
+          </p>
           <div class="action-row">
             <input
               v-model="resetEmail"
@@ -252,11 +300,19 @@ onUnmounted(() => {
               placeholder="admin@example.com"
               @keyup.enter="resetPassword"
             />
-            <button class="action-btn" :disabled="resetLoading || !resetEmail.trim()" @click="resetPassword">
+            <button
+              class="action-btn"
+              :disabled="resetLoading || !resetEmail.trim()"
+              @click="resetPassword"
+            >
               {{ resetLoading ? "Sending…" : "Send Reset" }}
             </button>
           </div>
-          <p v-if="resetResult" class="action-result" :class="resetResult.ok ? 'result--ok' : 'result--err'">
+          <p
+            v-if="resetResult"
+            class="action-result"
+            :class="resetResult.ok ? 'result--ok' : 'result--err'"
+          >
             {{ resetResult.message }}
           </p>
         </div>
@@ -272,11 +328,19 @@ onUnmounted(() => {
               placeholder="Video ID"
               @keyup.enter="deleteContent"
             />
-            <button class="action-btn action-btn--danger" :disabled="deleteLoading || !deleteVideoId.trim()" @click="deleteContent">
+            <button
+              class="action-btn action-btn--danger"
+              :disabled="deleteLoading || !deleteVideoId.trim()"
+              @click="deleteContent"
+            >
               {{ deleteLoading ? "Deleting…" : "Delete" }}
             </button>
           </div>
-          <p v-if="deleteResult" class="action-result" :class="deleteResult.ok ? 'result--ok' : 'result--err'">
+          <p
+            v-if="deleteResult"
+            class="action-result"
+            :class="deleteResult.ok ? 'result--ok' : 'result--err'"
+          >
             {{ deleteResult.message }}
           </p>
         </div>
@@ -294,7 +358,11 @@ onUnmounted(() => {
             >
               {{ autoRefresh ? "Auto: ON" : "Auto: OFF" }}
             </button>
-            <button class="action-btn" :disabled="logsLoading" @click="fetchLogs">
+            <button
+              class="action-btn"
+              :disabled="logsLoading"
+              @click="fetchLogs"
+            >
               Refresh
             </button>
           </div>
@@ -306,7 +374,10 @@ onUnmounted(() => {
             v-for="lvl in LEVELS"
             :key="lvl"
             class="chip"
-            :class="[`chip--${lvl.toLowerCase()}`, { active: levelFilter === lvl }]"
+            :class="[
+              `chip--${lvl.toLowerCase()}`,
+              { active: levelFilter === lvl },
+            ]"
             @click="levelFilter = lvl"
           >
             {{ lvl }}
@@ -359,6 +430,14 @@ onUnmounted(() => {
         <p v-if="logs.length > 0" class="log-count">
           Showing {{ filteredLogs.length }} of {{ logs.length }} entries
         </p>
+
+        <article v-if="loadingVideos" class="metric status">
+          <p class="label">Loading video metrics...</p>
+        </article>
+
+        <article v-else-if="videoError" class="metric status">
+          <p class="label">{{ videoError }}</p>
+        </article>
       </section>
     </template>
   </main>
@@ -379,6 +458,10 @@ onUnmounted(() => {
   border-radius: 14px;
   background: #1a1a1a;
   padding: 16px;
+}
+
+.status {
+  grid-column: 1 / -1;
 }
 
 .admin-card h1 {
@@ -564,13 +647,33 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-.chip.active { color: #fff; }
-.chip--all.active      { border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.08); }
-.chip--debug.active    { border-color: #6b7280; background: rgba(107,114,128,0.2); }
-.chip--info.active     { border-color: #3b82f6; background: rgba(59,130,246,0.18); }
-.chip--warning.active  { border-color: #f59e0b; background: rgba(245,158,11,0.18); }
-.chip--error.active    { border-color: #ef4444; background: rgba(239,68,68,0.18); }
-.chip--critical.active { border-color: #a855f7; background: rgba(168,85,247,0.18); }
+.chip.active {
+  color: #fff;
+}
+.chip--all.active {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+}
+.chip--debug.active {
+  border-color: #6b7280;
+  background: rgba(107, 114, 128, 0.2);
+}
+.chip--info.active {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.18);
+}
+.chip--warning.active {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.18);
+}
+.chip--error.active {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.18);
+}
+.chip--critical.active {
+  border-color: #a855f7;
+  background: rgba(168, 85, 247, 0.18);
+}
 
 /* Log table */
 .log-table-wrapper {
@@ -594,7 +697,7 @@ onUnmounted(() => {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   white-space: nowrap;
 }
 
@@ -602,8 +705,12 @@ onUnmounted(() => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.log-table tbody tr:last-child { border-bottom: none; }
-.log-table tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
+.log-table tbody tr:last-child {
+  border-bottom: none;
+}
+.log-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
 
 .log-table td {
   padding: 9px 12px;
@@ -611,14 +718,32 @@ onUnmounted(() => {
   vertical-align: top;
 }
 
-.col-time    { white-space: nowrap; color: #6b7280; font-size: 12px; }
-.col-level   { white-space: nowrap; }
-.col-logger  { white-space: nowrap; color: #9ca3af; font-size: 12px; }
-.col-message { word-break: break-word; }
+.col-time {
+  white-space: nowrap;
+  color: #6b7280;
+  font-size: 12px;
+}
+.col-level {
+  white-space: nowrap;
+}
+.col-logger {
+  white-space: nowrap;
+  color: #9ca3af;
+  font-size: 12px;
+}
+.col-message {
+  word-break: break-word;
+}
 
-.row--error td    { color: #fca5a5; }
-.row--critical td { color: #d8b4fe; }
-.row--warning td  { color: #fde68a; }
+.row--error td {
+  color: #fca5a5;
+}
+.row--critical td {
+  color: #d8b4fe;
+}
+.row--warning td {
+  color: #fde68a;
+}
 
 /* Badges */
 .badge {
@@ -630,11 +755,26 @@ onUnmounted(() => {
   letter-spacing: 0.04em;
 }
 
-.badge--debug    { background: rgba(107,114,128,0.25); color: #9ca3af; }
-.badge--info     { background: rgba(59,130,246,0.2);   color: #93c5fd; }
-.badge--warning  { background: rgba(245,158,11,0.2);   color: #fcd34d; }
-.badge--error    { background: rgba(239,68,68,0.2);    color: #fca5a5; }
-.badge--critical { background: rgba(168,85,247,0.22);  color: #d8b4fe; }
+.badge--debug {
+  background: rgba(107, 114, 128, 0.25);
+  color: #9ca3af;
+}
+.badge--info {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+.badge--warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+.badge--error {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+.badge--critical {
+  background: rgba(168, 85, 247, 0.22);
+  color: #d8b4fe;
+}
 
 .error-banner {
   color: #fca5a5;
