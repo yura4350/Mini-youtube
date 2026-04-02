@@ -41,6 +41,81 @@ let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
 const LEVELS = ["ALL", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"];
 
+// Ban user
+const banUserId = ref("");
+const banLoading = ref(false);
+const banResult = ref<{ ok: boolean; message: string } | null>(null);
+
+async function banUser() {
+  if (!banUserId.value.trim()) return;
+  banLoading.value = true;
+  banResult.value = null;
+  try {
+    const res = await fetch(`${ADMIN_API}/admin/users/${encodeURIComponent(banUserId.value.trim())}/ban`, {
+      method: "PATCH",
+    });
+    const data = await res.json();
+    banResult.value = res.ok
+      ? { ok: true, message: `User "${data.user_id}" ban status updated.` }
+      : { ok: false, message: data.detail ?? "Ban request failed." };
+  } catch {
+    banResult.value = { ok: false, message: "Could not reach admin service." };
+  } finally {
+    banLoading.value = false;
+  }
+}
+
+// Password reset
+const resetEmail = ref("");
+const resetLoading = ref(false);
+const resetResult = ref<{ ok: boolean; message: string } | null>(null);
+
+async function resetPassword() {
+  if (!resetEmail.value.trim()) return;
+  resetLoading.value = true;
+  resetResult.value = null;
+  try {
+    const res = await fetch(
+      `${ADMIN_API}/admin/auth/reset?email=${encodeURIComponent(resetEmail.value.trim())}`,
+      { method: "POST" },
+    );
+    const data = await res.json();
+    resetResult.value = res.ok
+      ? { ok: true, message: `Password reset triggered for "${data.email}".` }
+      : { ok: false, message: data.detail ?? "Reset request failed." };
+  } catch {
+    resetResult.value = { ok: false, message: "Could not reach admin service." };
+  } finally {
+    resetLoading.value = false;
+  }
+}
+
+// Delete content
+const deleteVideoId = ref("");
+const deleteLoading = ref(false);
+const deleteResult = ref<{ ok: boolean; message: string } | null>(null);
+
+async function deleteContent() {
+  if (!deleteVideoId.value.trim()) return;
+  deleteLoading.value = true;
+  deleteResult.value = null;
+  try {
+    const res = await fetch(
+      `${ADMIN_API}/admin/content/${encodeURIComponent(deleteVideoId.value.trim())}`,
+      { method: "DELETE" },
+    );
+    const data = await res.json();
+    deleteResult.value = res.ok
+      ? { ok: true, message: `Video "${data.video_id}" deleted successfully.` }
+      : { ok: false, message: data.detail ?? "Delete request failed." };
+    if (res.ok) deleteVideoId.value = "";
+  } catch {
+    deleteResult.value = { ok: false, message: "Could not reach admin service." };
+  } finally {
+    deleteLoading.value = false;
+  }
+}
+
 const filteredLogs = computed(() => {
   if (levelFilter.value === "ALL") return logs.value;
   return logs.value.filter((l) => l.level === levelFilter.value);
@@ -141,6 +216,70 @@ onUnmounted(() => {
           <p class="label">Log entries</p>
           <p class="value">{{ apiMetrics.log_entries }}</p>
         </article>
+      </section>
+
+      <!-- Admin actions -->
+      <section class="actions-grid">
+        <!-- Ban user -->
+        <div class="action-card">
+          <h2 class="section-title">Ban User</h2>
+          <p class="action-desc">Suspend a user account by ID.</p>
+          <div class="action-row">
+            <input
+              v-model="banUserId"
+              class="action-input"
+              placeholder="User ID"
+              @keyup.enter="banUser"
+            />
+            <button class="action-btn action-btn--danger" :disabled="banLoading || !banUserId.trim()" @click="banUser">
+              {{ banLoading ? "Banning…" : "Ban" }}
+            </button>
+          </div>
+          <p v-if="banResult" class="action-result" :class="banResult.ok ? 'result--ok' : 'result--err'">
+            {{ banResult.message }}
+          </p>
+        </div>
+
+        <!-- Password reset -->
+        <div class="action-card">
+          <h2 class="section-title">Reset Password</h2>
+          <p class="action-desc">Trigger a password reset email for an admin account.</p>
+          <div class="action-row">
+            <input
+              v-model="resetEmail"
+              class="action-input"
+              type="email"
+              placeholder="admin@example.com"
+              @keyup.enter="resetPassword"
+            />
+            <button class="action-btn" :disabled="resetLoading || !resetEmail.trim()" @click="resetPassword">
+              {{ resetLoading ? "Sending…" : "Send Reset" }}
+            </button>
+          </div>
+          <p v-if="resetResult" class="action-result" :class="resetResult.ok ? 'result--ok' : 'result--err'">
+            {{ resetResult.message }}
+          </p>
+        </div>
+
+        <!-- Delete content -->
+        <div class="action-card">
+          <h2 class="section-title">Delete Content</h2>
+          <p class="action-desc">Permanently remove a video by ID.</p>
+          <div class="action-row">
+            <input
+              v-model="deleteVideoId"
+              class="action-input"
+              placeholder="Video ID"
+              @keyup.enter="deleteContent"
+            />
+            <button class="action-btn action-btn--danger" :disabled="deleteLoading || !deleteVideoId.trim()" @click="deleteContent">
+              {{ deleteLoading ? "Deleting…" : "Delete" }}
+            </button>
+          </div>
+          <p v-if="deleteResult" class="action-result" :class="deleteResult.ok ? 'result--ok' : 'result--err'">
+            {{ deleteResult.message }}
+          </p>
+        </div>
       </section>
 
       <!-- System logs -->
@@ -280,6 +419,77 @@ onUnmounted(() => {
   color: #fff;
   font-size: 28px;
   font-weight: 700;
+}
+
+/* Admin actions */
+.actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.action-card {
+  background: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.action-desc {
+  color: #6b7280;
+  font-size: 13px;
+  margin: 0;
+}
+
+.action-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.action-input {
+  background: #0f0f0f;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #f2f4f8;
+  padding: 8px 12px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.action-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.action-btn--danger {
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+}
+
+.action-btn--danger:not(:disabled):hover {
+  background: rgba(220, 38, 38, 0.2);
+}
+
+.action-result {
+  font-size: 12px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.result--ok {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.result--err {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 /* Logs section */
@@ -450,13 +660,15 @@ onUnmounted(() => {
 }
 
 @media (max-width: 860px) {
-  .admin-grid {
+  .admin-grid,
+  .actions-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 520px) {
-  .admin-grid {
+  .admin-grid,
+  .actions-grid {
     grid-template-columns: 1fr;
   }
 }
