@@ -1,37 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, ref, onMounted, onUnmounted } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { authService } from "@/services/auth";
 import AppIcon from "@/components/icons/AppIcon.vue";
 import { fetchVideos } from "@/services/videos";
 import type { VideoItem } from "@/types/video";
 
-const currentUser = computed(() => authService.getCurrentUser());
-const users = computed(() => authService.getAllUsers());
-const videos = ref<VideoItem[]>([]);
-const loadingVideos = ref(false);
-const videoError = ref("");
-
-const totalViews = computed(() =>
-  videos.value.reduce((sum, video) => sum + video.views, 0),
-);
-
-async function loadVideos() {
-  loadingVideos.value = true;
-  videoError.value = "";
-
-  try {
-    videos.value = await fetchVideos();
-  } catch (error) {
-    videoError.value =
-      error instanceof Error ? error.message : "Failed to load video metrics.";
-  } finally {
-    loadingVideos.value = false;
-  }
-}
-
-onMounted(() => {
-  loadVideos();
-});
 const ADMIN_API = "http://localhost:8001";
 
 interface LogEntry {
@@ -54,9 +27,27 @@ interface UserCount {
 }
 
 const currentUser = computed(() => authService.getCurrentUser());
+
+// Video metrics from the video API
+const videos = ref<VideoItem[]>([]);
+const loadingVideos = ref(false);
+const videoError = ref("");
 const totalViews = computed(() =>
-  mockVideos.reduce((sum, video) => sum + video.views, 0),
+  videos.value.reduce((sum, video) => sum + video.views, 0),
 );
+
+async function loadVideos() {
+  loadingVideos.value = true;
+  videoError.value = "";
+  try {
+    videos.value = await fetchVideos();
+  } catch (error) {
+    videoError.value =
+      error instanceof Error ? error.message : "Failed to load video metrics.";
+  } finally {
+    loadingVideos.value = false;
+  }
+}
 
 const logs = ref<LogEntry[]>([]);
 const apiMetrics = ref<ApiMetrics | null>(null);
@@ -202,7 +193,10 @@ function formatTimestamp(iso: string) {
   return new Date(iso).toLocaleString();
 }
 
-onMounted(fetchLogs);
+onMounted(() => {
+  loadVideos();
+  fetchLogs();
+});
 onUnmounted(() => {
   if (refreshTimer !== null) clearInterval(refreshTimer);
 });
@@ -430,14 +424,6 @@ onUnmounted(() => {
         <p v-if="logs.length > 0" class="log-count">
           Showing {{ filteredLogs.length }} of {{ logs.length }} entries
         </p>
-
-        <article v-if="loadingVideos" class="metric status">
-          <p class="label">Loading video metrics...</p>
-        </article>
-
-        <article v-else-if="videoError" class="metric status">
-          <p class="label">{{ videoError }}</p>
-        </article>
       </section>
     </template>
   </main>
