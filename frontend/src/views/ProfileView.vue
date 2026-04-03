@@ -7,7 +7,7 @@ import { fetchVideos } from '@/services/videos'
 import type { VideoItem } from '@/types/video'
 
 const authStore = useAuthStore()
-const tab = ref<'videos' | 'subscriptions' | 'notifications'>('videos')
+const tab = ref<'videos' | 'subscriptions'>('videos')
 const editMode = ref(false)
 const message = ref('')
 const loadingVideos = ref(false)
@@ -81,10 +81,7 @@ onMounted(() => {
             ><AppIcon name="users" :size="14" />
             {{ authStore.currentUser.subscribedTo.length }} subscriptions</span
           >
-          <span
-            ><AppIcon name="bell" :size="14" />
-            {{ authStore.currentUser.notifications.length }} notifications</span
-          >
+          <span><AppIcon name="bell" :size="14" /> Notification inbox enabled</span>
         </div>
       </div>
     </section>
@@ -122,9 +119,9 @@ onMounted(() => {
       <button :class="{ active: tab === 'subscriptions' }" @click="tab = 'subscriptions'">
         <AppIcon name="users" :size="14" /> Subscriptions
       </button>
-      <button :class="{ active: tab === 'notifications' }" @click="tab = 'notifications'">
-        <AppIcon name="bell" :size="14" /> Notifications
-      </button>
+      <RouterLink to="/notifications" class="inbox-link">
+        <AppIcon name="bell" :size="14" /> Open notification inbox
+      </RouterLink>
     </section>
 
     <section v-if="tab === 'videos'" class="video-grid">
@@ -139,14 +136,6 @@ onMounted(() => {
       <p v-else-if="videoError" class="muted">{{ videoError }}</p>
       <VideoCard v-for="video in subscribedVideos" :key="video.id" :video="video" />
       <p v-if="!loadingVideos && !videoError && subscribedVideos.length === 0" class="muted">No subscriptions yet.</p>
-    </section>
-
-    <section v-if="tab === 'notifications'" class="notification-list">
-      <article v-for="item in authStore.currentUser.notifications" :key="item.id" class="notification-item">
-        <p>{{ item.message }}</p>
-        <small>{{ new Date(item.timestamp).toLocaleString() }}</small>
-      </article>
-      <p v-if="authStore.currentUser.notifications.length === 0" class="muted">No notifications yet.</p>
     </section>
 
     <p v-if="message" class="ok">{{ message }}</p>
@@ -279,29 +268,29 @@ button.ghost {
   color: #fff;
 }
 
+.inbox-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 9px;
+  color: #e5e7eb;
+  padding: 8px 12px;
+  background: #161616;
+}
+
+.inbox-link:hover {
+  border-color: rgba(239, 68, 68, 0.75);
+  background: rgba(220, 38, 38, 0.16);
+  color: #fff;
+}
+
 .video-grid {
   margin-top: 12px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
-}
-
-.notification-list {
-  margin-top: 12px;
-  display: grid;
-  gap: 10px;
-}
-
-.notification-item {
-  padding: 12px;
-}
-
-.notification-item p {
-  color: #eceff5;
-}
-
-.notification-item small {
-  color: #a4aab6;
 }
 
 .muted {
