@@ -1,19 +1,57 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AppIcon from '@/components/icons/AppIcon.vue'
+import { fetchNotifications } from '@/services/notifications'
 
 const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 const searchInput = ref('')
+const unreadNotificationCount = ref(0)
 
 const showSearch = computed(() => route.name !== 'login' && route.name !== 'register')
 
+async function refreshUnreadNotifications() {
+  if (!authStore.currentUser) {
+    unreadNotificationCount.value = 0
+    return
+  }
+
+  try {
+    const items = await fetchNotifications({
+      userId: authStore.currentUser.id,
+      unreadOnly: true,
+      limit: 200,
+      offset: 0,
+    })
+    unreadNotificationCount.value = items.length
+  } catch {
+    unreadNotificationCount.value = 0
+  }
+}
+
+function handleNotificationsUpdated() {
+  refreshUnreadNotifications()
+}
+
 onMounted(() => {
   authStore.hydrate()
+  refreshUnreadNotifications()
+  window.addEventListener('notifications-updated', handleNotificationsUpdated)
 })
+
+onUnmounted(() => {
+  window.removeEventListener('notifications-updated', handleNotificationsUpdated)
+})
+
+watch(
+  () => authStore.currentUser?.id,
+  () => {
+    refreshUnreadNotifications()
+  },
+)
 
 function logout() {
   authStore.logout()
@@ -45,6 +83,15 @@ function submitSearch() {
         <RouterLink v-if="authStore.isAuthenticated" to="/upload"
           ><AppIcon name="upload" :size="16" /> Upload</RouterLink
         >
+        <RouterLink v-if="authStore.isAuthenticated" to="/notifications" class="notify-link">
+          <span class="notify-icon-wrap">
+            <AppIcon name="bell" :size="16" />
+            <span v-if="unreadNotificationCount > 0" class="notify-badge">
+              {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
+            </span>
+          </span>
+          Notifications
+        </RouterLink>
         <RouterLink v-if="!authStore.isAuthenticated" to="/login"
           ><AppIcon name="login" :size="16" /> Login</RouterLink
         >
@@ -156,6 +203,31 @@ function submitSearch() {
   font-size: 14px;
   padding: 8px 10px;
   border-radius: 8px;
+}
+
+.notify-link {
+  position: relative;
+}
+
+.notify-icon-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.notify-badge {
+  position: absolute;
+  right: -10px;
+  top: -9px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  padding: 0 5px;
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+  background: #ef4444;
+  color: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.45);
 }
 
 .topnav a.router-link-exact-active,
