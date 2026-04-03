@@ -50,6 +50,22 @@ services:
       - "8001:8001"
     command: ["uvicorn", "src.admin_service.main:app", "--host", "0.0.0.0", "--port", "8001"]
 
+  communication:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: media_server_communication
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://media_user:media_pass@db:5432/media_db
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8002:8002"
+    command: ["uvicorn", "src.communication_service.main:app", "--host", "0.0.0.0", "--port", "8002"]
+
   frontend:
     image: node:20-alpine
     container_name: media_server_frontend
