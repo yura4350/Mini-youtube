@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import type { VideoItem } from '@/types/video'
 import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
-import { fetchVideos } from '@/services/videos'
+import { fetchRecommended } from '@/services/dashboard'
 
 const activeCategory = ref('All')
 const showFilterPanel = ref(false)
@@ -50,7 +50,7 @@ async function loadVideos() {
   errorMessage.value = ''
 
   try {
-    videos.value = await fetchVideos()
+    videos.value = await fetchRecommended()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Failed to load videos'
   } finally {
