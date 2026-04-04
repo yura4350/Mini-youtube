@@ -27,6 +27,9 @@ app.add_middleware(
 chat_rooms: Dict[str, Set[WebSocket]] = {}
 chat_history: Dict[str, List[dict]] = {}
 MAX_CHAT_HISTORY_PER_ROOM = 100
+direct_chat_rooms: Dict[str, Set[WebSocket]] = {}
+direct_chat_history: Dict[str, List[dict]] = {}
+MAX_DIRECT_CHAT_HISTORY_PER_ROOM = 200
 
 
 class NotificationType(str, Enum):
@@ -78,6 +81,26 @@ async def broadcast_to_room(video_id: str, payload: dict):
     if stale_sockets and video_id in chat_rooms:
         for socket in stale_sockets:
             chat_rooms[video_id].discard(socket)
+
+
+def _direct_room_key(user_a: str, user_b: str) -> str:
+    left, right = sorted([user_a, user_b])
+    return f"{left}::{right}"
+
+
+async def broadcast_to_direct_room(room_key: str, payload: dict):
+    sockets = list(direct_chat_rooms.get(room_key, set()))
+    stale_sockets: List[WebSocket] = []
+
+    for socket in sockets:
+        try:
+            await socket.send_json(payload)
+        except Exception:
+            stale_sockets.append(socket)
+
+    if stale_sockets and room_key in direct_chat_rooms:
+        for socket in stale_sockets:
+            direct_chat_rooms[room_key].discard(socket)
 
 
 def get_db():
@@ -297,3 +320,76 @@ async def real_time_chat(websocket: WebSocket):
                 "timestamp": _now_iso(),
             },
         )
+
+
+@app.websocket("/comm/direct-chat")
+async def direct_chat(websocket: WebSocket):
+    await websocket.accept()
+
+    user_id = (websocket.query_params.get("user_id") or "").strip()
+    username = (websocket.query_params.get("username") or "").strip()
+    peer_id = (websocket.query_params.get("peer_id") or "").strip()
+
+    if not user_id or not username or not peer_id:
+        await websocket.send_json(
+            {
+                "type": "error",
+                "message": "user_id, username and peer_id are required",
+            }
+        )
+        await websocket.close(code=1008)
+        return
+
+    if user_id == peer_id:
+        await websocket.send_json(
+            {
+                "type": "error",
+                "message": "peer_id must be different from user_id",
+            }
+        )
+        await websocket.close(code=1008)
+        return
+
+    room_key = _direct_room_key(user_id, peer_id)
+    room = direct_chat_rooms.setdefault(room_key, set())
+    room.add(websocket)
+
+    history = direct_chat_history.get(room_key, [])
+    await websocket.send_json(
+        {
+            "type": "history",
+            "room_key": room_key,
+            "messages": history[-80:],
+        }
+    )
+
+    try:
+        while True:
+            payload = await websocket.receive_json()
+            message = str(payload.get("message") or "").strip()
+            if not message:
+                continue
+
+            event = {
+                "type": "direct_message",
+                "room_key": room_key,
+                "sender_user_id": user_id,
+                "sender_username": username,
+                "peer_user_id": peer_id,
+                "message": message[:2000],
+                "timestamp": _now_iso(),
+            }
+
+            room_history = direct_chat_history.setdefault(room_key, [])
+            room_history.append(event)
+            if len(room_history) > MAX_DIRECT_CHAT_HISTORY_PER_ROOM:
+                direct_chat_history[room_key] = room_history[-MAX_DIRECT_CHAT_HISTORY_PER_ROOM:]
+
+            await broadcast_to_direct_room(room_key, event)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if room_key in direct_chat_rooms:
+            direct_chat_rooms[room_key].discard(websocket)
+            if not direct_chat_rooms[room_key]:
+                direct_chat_rooms.pop(room_key, None)
