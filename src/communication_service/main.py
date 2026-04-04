@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 from enum import Enum
-from typing import List
+from typing import Dict, List, Set
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,21 @@ from src.video_crud_service.database import SessionLocal, init_db
 from .models import Notification
 
 app = FastAPI(title="Communication Service")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+chat_rooms: Dict[str, Set[WebSocket]] = {}
+chat_history: Dict[str, List[dict]] = {}
+MAX_CHAT_HISTORY_PER_ROOM = 100
 
 
 class NotificationType(str, Enum):
@@ -43,6 +59,25 @@ class NotificationRecord(BaseModel):
 class MarkNotificationReadRequest(BaseModel):
     notification_ids: List[str] = Field(..., min_items=1)
     recipient_user_id: str | None = None
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+async def broadcast_to_room(video_id: str, payload: dict):
+    sockets = list(chat_rooms.get(video_id, set()))
+    stale_sockets: List[WebSocket] = []
+
+    for socket in sockets:
+        try:
+            await socket.send_json(payload)
+        except Exception:
+            stale_sockets.append(socket)
+
+    if stale_sockets and video_id in chat_rooms:
+        for socket in stale_sockets:
+            chat_rooms[video_id].discard(socket)
 
 
 def get_db():
@@ -177,3 +212,88 @@ def mark_notifications_read(
         "updated_count": updated_count,
         "read_at": read_at.isoformat(),
     }
+
+
+@app.websocket("/comm/real-time-chat")
+async def real_time_chat(websocket: WebSocket):
+    await websocket.accept()
+
+    video_id = (websocket.query_params.get("video_id") or "").strip()
+    user_id = (websocket.query_params.get("user_id") or "").strip()
+    username = (websocket.query_params.get("username") or "").strip()
+
+    if not video_id or not user_id or not username:
+        await websocket.send_json(
+            {
+                "type": "error",
+                "message": "video_id, user_id and username are required",
+            }
+        )
+        await websocket.close(code=1008)
+        return
+
+    room = chat_rooms.setdefault(video_id, set())
+    room.add(websocket)
+
+    history = chat_history.get(video_id, [])
+    await websocket.send_json(
+        {
+            "type": "history",
+            "video_id": video_id,
+            "messages": history[-50:],
+        }
+    )
+
+    await broadcast_to_room(
+        video_id,
+        {
+            "type": "system",
+            "video_id": video_id,
+            "user_id": user_id,
+            "username": username,
+            "message": f"{username} joined the chat",
+            "timestamp": _now_iso(),
+        },
+    )
+
+    try:
+        while True:
+            payload = await websocket.receive_json()
+            message = str(payload.get("message") or "").strip()
+            if not message:
+                continue
+
+            event = {
+                "type": "chat_message",
+                "video_id": video_id,
+                "user_id": user_id,
+                "username": username,
+                "message": message[:2000],
+                "timestamp": _now_iso(),
+            }
+
+            room_history = chat_history.setdefault(video_id, [])
+            room_history.append(event)
+            if len(room_history) > MAX_CHAT_HISTORY_PER_ROOM:
+                chat_history[video_id] = room_history[-MAX_CHAT_HISTORY_PER_ROOM:]
+
+            await broadcast_to_room(video_id, event)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if video_id in chat_rooms:
+            chat_rooms[video_id].discard(websocket)
+            if not chat_rooms[video_id]:
+                chat_rooms.pop(video_id, None)
+
+        await broadcast_to_room(
+            video_id,
+            {
+                "type": "system",
+                "video_id": video_id,
+                "user_id": user_id,
+                "username": username,
+                "message": f"{username} left the chat",
+                "timestamp": _now_iso(),
+            },
+        )
