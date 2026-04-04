@@ -3,6 +3,7 @@ import { reactive, ref } from 'vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { uploadVideo } from '@/services/videos'
+import { toApiUploaderId } from '@/services/user-id'
 
 const authStore = useAuthStore()
 const loading = ref(false)
@@ -45,8 +46,8 @@ async function onSubmit() {
     return
   }
 
-  const uploaderId = Number(authStore.currentUser?.id)
-  if (!Number.isInteger(uploaderId) || uploaderId <= 0) {
+  const uploaderId = toApiUploaderId(authStore.currentUser?.id)
+  if (uploaderId === null) {
     errorMessage.value = 'Current user id is not compatible with upload API.'
     return
   }

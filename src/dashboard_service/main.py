@@ -3,6 +3,7 @@ import os
 
 from fastapi import FastAPI, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from src.video_crud_service.database import SessionLocal

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, reactive } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { formatViews } from '@/services/video-format'
 import { fetchVideoById, fetchVideos, updateVideo, deleteVideo } from '@/services/videos'
+import { toApiUploaderId } from '@/services/user-id'
 import { useAuthStore } from '@/stores/auth'
 import type { VideoItem } from '@/types/video'
 
@@ -20,6 +21,34 @@ const isEditing = ref(false)
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const editMessage = ref('')
+const chatMessages = ref<ChatMessage[]>([])
+const chatInput = ref('')
+const chatConnected = ref(false)
+const chatStatus = ref('Connecting...')
+const chatContainer = ref<HTMLElement | null>(null)
+let chatSocket: WebSocket | null = null
+
+interface ChatMessage {
+  type: 'chat_message' | 'system'
+  video_id: string
+  user_id: string
+  username: string
+  message: string
+  timestamp: string
+}
+
+function isChatMessagePayload(value: unknown): value is ChatMessage {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Record<string, unknown>
+  return (
+    (candidate.type === 'chat_message' || candidate.type === 'system') &&
+    typeof candidate.video_id === 'string' &&
+    typeof candidate.user_id === 'string' &&
+    typeof candidate.username === 'string' &&
+    typeof candidate.message === 'string' &&
+    typeof candidate.timestamp === 'string'
+  )
+}
 
 const editForm = reactive({
   title: '',
@@ -63,6 +92,94 @@ async function loadCurrentVideo() {
   }
 }
 
+function scrollChatToBottom() {
+  if (!chatContainer.value) return
+  chatContainer.value.scrollTop = chatContainer.value.scrollHeight
+}
+
+function closeChatSocket() {
+  if (chatSocket) {
+    chatSocket.close()
+    chatSocket = null
+  }
+}
+
+function connectChat() {
+  closeChatSocket()
+
+  if (!currentVideo.value || !authStore.currentUser) {
+    chatMessages.value = []
+    chatConnected.value = false
+    chatStatus.value = 'Login required to join chat'
+    return
+  }
+
+  const explicitWsBase = (import.meta.env.VITE_COMM_WS_BASE_URL || '').trim()
+  const wsBase = explicitWsBase
+    ? explicitWsBase.replace(/\/$/, '')
+    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://localhost:8002`
+
+  const params = new URLSearchParams({
+    video_id: currentVideo.value.id,
+    user_id: authStore.currentUser.id,
+    username: authStore.currentUser.username,
+  })
+
+  chatStatus.value = 'Connecting...'
+  chatSocket = new WebSocket(`${wsBase}/comm/real-time-chat?${params.toString()}`)
+
+  chatSocket.onopen = () => {
+    chatConnected.value = true
+    chatStatus.value = 'Live'
+  }
+
+  chatSocket.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data) as
+        | { type: 'history'; messages: ChatMessage[] }
+        | { type: 'chat_message' | 'system'; message: string; [key: string]: unknown }
+        | { type: 'error'; message: string }
+
+      if (payload.type === 'history') {
+        chatMessages.value = payload.messages
+        setTimeout(scrollChatToBottom, 0)
+        return
+      }
+
+      if (payload.type === 'error') {
+        chatStatus.value = payload.message
+        return
+      }
+
+      if (isChatMessagePayload(payload)) {
+        chatMessages.value.push(payload)
+        setTimeout(scrollChatToBottom, 0)
+      }
+    } catch {
+      // Ignore malformed messages from peers.
+    }
+  }
+
+  chatSocket.onclose = () => {
+    chatConnected.value = false
+    chatStatus.value = 'Disconnected'
+  }
+
+  chatSocket.onerror = () => {
+    chatConnected.value = false
+    chatStatus.value = 'Connection error'
+  }
+}
+
+function sendChatMessage() {
+  if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) return
+  const text = chatInput.value.trim()
+  if (!text) return
+
+  chatSocket.send(JSON.stringify({ message: text }))
+  chatInput.value = ''
+}
+
 const relatedVideos = computed(() => {
   if (!currentVideo.value) return []
   return allVideos.value
@@ -77,9 +194,15 @@ onMounted(() => {
   loadCurrentVideo()
 })
 
+onUnmounted(() => {
+  closeChatSocket()
+})
+
 const isOwner = computed(() => {
   if (!currentVideo.value || !authStore.currentUser) return false
-  return String(currentVideo.value.authorId) === String(authStore.currentUser.id)
+  const currentUserUploaderId = toApiUploaderId(authStore.currentUser.id)
+  if (currentUserUploaderId === null) return false
+  return String(currentVideo.value.authorId) === String(currentUserUploaderId)
 })
 
 function startEditing() {
@@ -141,6 +264,13 @@ watch(
   () => route.params.id,
   () => {
     loadCurrentVideo()
+  },
+)
+
+watch(
+  () => [currentVideo.value?.id, authStore.currentUser?.id],
+  () => {
+    connectChat()
   },
 )
 </script>
@@ -220,7 +350,44 @@ watch(
     </section>
 
     <aside class="side-col">
-      <h2><AppIcon name="video" :size="16" /> Related videos</h2>
+      <section class="chat-card">
+        <header class="chat-header">
+          <h3><AppIcon name="users" :size="15" /> Live chat</h3>
+          <span :class="['chat-state', { live: chatConnected }]">{{ chatStatus }}</span>
+        </header>
+
+        <div ref="chatContainer" class="chat-messages">
+          <p v-if="chatMessages.length === 0" class="chat-empty">No messages yet.</p>
+
+          <article
+            v-for="(item, index) in chatMessages"
+            :key="`${item.timestamp}-${index}`"
+            class="chat-row"
+            :class="{ system: item.type === 'system' }"
+          >
+            <p class="chat-meta">
+              <strong>{{ item.username }}</strong>
+              <small>{{ new Date(item.timestamp).toLocaleTimeString() }}</small>
+            </p>
+            <p class="chat-text">{{ item.message }}</p>
+          </article>
+        </div>
+
+        <form class="chat-form" @submit.prevent="sendChatMessage">
+          <input
+            v-model="chatInput"
+            :disabled="!authStore.currentUser || !chatConnected"
+            type="text"
+            placeholder="Say something..."
+            maxlength="2000"
+          />
+          <button type="submit" :disabled="!chatInput.trim() || !chatConnected">
+            <AppIcon name="play" :size="12" /> Send
+          </button>
+        </form>
+      </section>
+
+      <h2 class="related-heading"><AppIcon name="video" :size="16" /> Related videos</h2>
       <div class="related-list">
         <VideoCard v-for="video in relatedVideos" :key="video.id" :video="video" />
       </div>
@@ -275,6 +442,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
 
 .actions {
   display: flex;
@@ -407,7 +575,6 @@ h1 {
   color: #10b981;
   font-size: 14px;
 }
-}
 
 .channel-card {
   margin-top: 14px;
@@ -450,9 +617,134 @@ h1 {
   gap: 14px;
 }
 
+.related-heading {
+  margin-top: 16px;
+}
+
+.chat-card {
+  margin-top: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #1a1a1a;
+  padding: 12px;
+}
+
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.chat-header h3 {
+  color: #f4f5f8;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-state {
+  color: #9ca3af;
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.chat-state.live {
+  color: #d1fae5;
+  border-color: rgba(16, 185, 129, 0.65);
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.chat-messages {
+  height: 260px;
+  overflow-y: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #111;
+  padding: 10px;
+}
+
+.chat-empty {
+  color: #8f97a4;
+  text-align: center;
+  margin-top: 100px;
+}
+
+.chat-row {
+  margin-bottom: 10px;
+}
+
+.chat-row.system .chat-meta strong {
+  color: #fda4af;
+}
+
+.chat-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat-meta strong {
+  color: #fff;
+  font-size: 13px;
+}
+
+.chat-meta small {
+  color: #8f97a4;
+  font-size: 11px;
+}
+
+.chat-text {
+  color: #d5dae3;
+  margin-top: 2px;
+  line-height: 1.45;
+  font-size: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-form {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.chat-form input {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #121212;
+  color: #fff;
+  padding: 9px 12px;
+}
+
+.chat-form button {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(220, 38, 38, 0.92);
+  color: #fff;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-form button:disabled,
+.chat-form input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 @media (max-width: 1100px) {
   .watch-page {
     grid-template-columns: 1fr;
+  }
+
+  .chat-messages {
+    height: 220px;
   }
 }
 </style>
