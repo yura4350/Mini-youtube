@@ -222,5 +222,10 @@ __marimo__/
 postgres_data/
 
 
+# video upload artifacts
+src/video_crud_service/uploads/
+src/video_crud_service/uploads/thumbnails/
+
+
 #Vue
 frontend/.pnpm-store
