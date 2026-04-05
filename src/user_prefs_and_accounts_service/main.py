@@ -218,7 +218,7 @@ def verify_token_endpoint(current_user:User = Depends(get_current_active_user)):
             "id": current_user.id,
             "name": current_user.name,
             "email": current_user.email,
-            "role": current_user.role
+            "role": current_user.role,
         }
     }
 
