@@ -1,3 +1,5 @@
+// Single source of truth for the frontend application for "Who is currently logged in"
+
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { authService } from '@/services/auth'
@@ -8,23 +10,19 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => currentUser.value !== null)
 
-  function hydrate() {
-    currentUser.value = authService.getCurrentUser()
+  async function hydrate() {
+    currentUser.value = await authService.hydrateCurrentUser()
   }
 
-  function login(payload: LoginPayload) {
-    const result = authService.login(payload)
-    if (result.ok) {
-      currentUser.value = result.user
-    }
+  async function login(payload: LoginPayload) {
+    const result = await authService.login(payload)
+    if (result.ok) currentUser.value = result.user
     return result
   }
 
-  function register(payload: RegisterPayload) {
-    const result = authService.register(payload)
-    if (result.ok) {
-      currentUser.value = result.user
-    }
+  async function register(payload: RegisterPayload) {
+    const result = await authService.register(payload)
+    if (result.ok) currentUser.value = result.user
     return result
   }
 
