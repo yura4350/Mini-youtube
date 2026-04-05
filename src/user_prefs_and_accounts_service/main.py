@@ -24,7 +24,7 @@ TOKEN_EXPIRES = 30
 
 # password hashing (bcrypt)
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 # Database setup
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -177,20 +177,22 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(db_user)
     return db_user
 
-@app.post("/token", response_model=Token)
-def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session=Depends(get_db)):
+@app.post("/auth/login/", response_model=Token)
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session=Depends(get_db)):
     user = db.query(User).filter(User.email == form_data.username).first()
 
     if not user or not verify_pwd(form_data.password, user.hashed_pwd):
         raise HTTPException(
-            status_code=404,
-            detail="Wrong info!"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     
     if not user.is_active:
         raise HTTPException(
-            status_code=404,
-            detail="Inactive User!"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     
     access_token_expires = timedelta(minutes=TOKEN_EXPIRES)
@@ -204,7 +206,7 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
 def root():
     return {"message":"Welcome to User Preferences and Accounts Service"}
 
-@app.get("/profile/", response_model=UserResponse)
+@app.get("/profile/", response_model=UserResponse) # Get personal profile
 def get_profile(current_user:User = Depends(get_current_active_user)):
     return current_user
 
@@ -220,8 +222,8 @@ def verify_token_endpoint(current_user:User = Depends(get_current_active_user)):
         }
     }
 
-# Get user
-@app.get("/users/{user_id}", response_model=UserResponse)
+# Get public user info
+@app.get("/user/profile/{user_id}", response_model=UserResponse)
 def get_user(user_id:int, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
 
@@ -230,30 +232,27 @@ def get_user(user_id:int, current_user:User = Depends(get_current_active_user), 
 
     return user
 
-# Create User
-@app.post("/users/", response_model=UserResponse)
-def create_user(user: UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
-    
-    if db.query(User).filter(User.email == user.email).first():
-        raise HTTPException(status_code=404, detail="User already exists!")
-
-    hashed_password = get_pwd_hash(user.password)
-    db_user = User (
-        name=user.name,
-        email=user.email,
-        role=user.role,
-        hashed_pwd=hashed_password
-    )
-
-    db.add(db_user)
-    db.commit() # send the info
-    db.refresh(db_user)
-    return db_user
-
-# Update user
+# Update any user (should be removed in the future)
 @app.put("/user/{user_id}", response_model=UserResponse)
 def update_user(user_id:int, update_user:UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
     db_user = db.query(User).filter(User.id == user_id).first()
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User does not exist")
+    
+    db_user.name = update_user.name
+    db_user.email = update_user.email
+    db_user.role = update_user.role
+
+
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+# Endpoint to let user update himself
+@app.put("/user/profile/edit", response_model=UserResponse)
+def update_user(update_user:UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == current_user.id).first()
 
     if not db_user:
         raise HTTPException(status_code=404, detail="User does not exist")
