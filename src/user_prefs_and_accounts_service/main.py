@@ -41,7 +41,6 @@ class User(Base):
     name = Column(String, nullable = False)
     email = Column(String, nullable = False, unique=True)
     role = Column(String, nullable = False)
-    bio = Column(String, nulable=False) # Not sure about setting nullable to false here
     hashed_pwd = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
 
@@ -52,7 +51,6 @@ class UserCreate(BaseModel):
     name:str
     email:str
     role:str
-    bio: str
     password:str
 
 class UserResponse(BaseModel): # Determines what is given by a model
@@ -60,7 +58,6 @@ class UserResponse(BaseModel): # Determines what is given by a model
     name:str
     email:str
     role:str
-    bio: str
     is_active: bool
 
     class Config:
@@ -173,7 +170,6 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
         name=user.name,
         email=user.email,
         role=user.role,
-        bio=user.bio,
         hashed_pwd=hashed_password
     )
     db.add(db_user)
@@ -223,7 +219,6 @@ def verify_token_endpoint(current_user:User = Depends(get_current_active_user)):
             "name": current_user.name,
             "email": current_user.email,
             "role": current_user.role,
-            "bio": current_user.bio
         }
     }
 
@@ -248,7 +243,6 @@ def update_user(user_id:int, update_user:UserCreate, current_user:User = Depends
     db_user.name = update_user.name
     db_user.email = update_user.email
     db_user.role = update_user.role
-    db_user.bio = update_user.bio
 
 
     db.commit()
@@ -266,7 +260,6 @@ def update_user(update_user:UserCreate, current_user:User = Depends(get_current_
     db_user.name = update_user.name
     db_user.email = update_user.email
     db_user.role = update_user.role
-    db_user.bio = update_user.bio
 
 
     db.commit()
