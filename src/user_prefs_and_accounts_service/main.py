@@ -1,16 +1,148 @@
-from datetime import datetime, timedelta, timezone
-from typing import Annotated, Optional
-
-from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, Integer, String, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
 
-SECRET_KEY = "fc42e6a3e2c0cd478aaea480e41fdcc1d4bb802c7d41fccbff59465f6945f190"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+from pydantic import BaseModel
+from typing import Optional, List
+
+from passlib.context import CryptContext # Used to help with hashing and password verification
+import jwt
+from datetime import datetime, timedelta
+
+from fastapi.middleware.cors import CORSMiddleware
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv() # Load the variables from .env file
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+TOKEN_EXPIRES = 30
+
+# password hashing (bcrypt)
+pwd_context = CryptContext(schemes=['bcrypt'], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Database setup
+engine = create_engine("sqlite:///users.db", connect_args={"check_same_thread":False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# Database Model (Our table structure)
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable = False)
+    email = Column(String, nullable = False, unique=True)
+    role = Column(String, nullable = False)
+    hashed_pwd = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+
+Base.metadata.create_all(engine)
+
+# Pydantic Models (Dataclass). Definitions of API Models
+class UserCreate(BaseModel):
+    name:str
+    email:str
+    role:str
+    password:str
+
+class UserResponse(BaseModel): # Determines what is given by a model
+    id:int
+    name:str
+    email:str
+    role:str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+# New Pydantic Models
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    email: Optional[str] = None
+
+
+# Security Functions
+def verify_pwd(plain_pwd: str, hashed_pwd: str) -> bool:
+    return pwd_context.verify(plain_pwd, hashed_pwd)
+
+def get_pwd_hash(password:str) -> str:
+    return pwd_context.hash(password)
+
+# generate dicrionary to hold access token
+def create_access_token(data:dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    
+    to_encode.update({"exp":expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+    return encoded_jwt
+
+def verify_token(token:str) -> TokenData:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+
+        if email is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not verify credentials",
+                headers={"WWW-Authenticate":"Bearer"}
+            )
+        return TokenData(email=email)
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not verify credentials",
+            headers={"WWW-Authenticate":"Bearer"}
+        )
+
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Auth Dependencies
+def get_current_user(token:str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    token_data = verify_token(token)
+    user = db.query(User).filter(User.email == token_data.email).first()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User does not exist",
+            headers={"WWW-Authenticate":"Bearer"}
+        )
+    return user
+
+def get_current_active_user(current_user: User = Depends(get_current_user)):
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=404,
+            detail="Incative User",
+        )
+    return current_user
 
 app = FastAPI(title="User Accounts Service")
 
@@ -22,169 +154,141 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory demo DB (replace with real DB later)
-db = {
-    "iurii": {
-        "username": "iurii",
-        "email": "iurii@gmail.com",
-        # password for this hash should match what you generated
-        "hashed_password": "$2b$12$IXmKdX2J.7Slc0w6zm5OZu3Yqhd0Ef5rlRnyN0b9zmenRQQPtNXqu",
-        "disabled": False,
-    }
-}
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-
-class TokenData(BaseModel):
-    username: Optional[str] = None
-
-
-class User(BaseModel):
-    username: str
-    email: Optional[str] = None
-    disabled: Optional[bool] = None
-
-
-class UserInDB(User):
-    hashed_password: str
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
-
-
-def get_user(users_db: dict, username: str) -> Optional[UserInDB]:
-    user_data = users_db.get(username)
-    if not user_data:
-        return None
-    return UserInDB(**user_data)
-
-
-def authenticate_user(users_db: dict, username: str, password: str) -> Optional[UserInDB]:
-    user = get_user(users_db, username)
-    if not user:
-        return None
-    if not verify_password(password, user.hashed_password):
-        return None
-    return user
-
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (
-        expires_delta if expires_delta else timedelta(minutes=15)
+# Auth Endpoints
+@app.post("/register", response_model=UserResponse)
+def register_user(user: UserCreate, db: Session = Depends(get_db)):
+    if db.query(User).filter(User.email == user.email).first():
+        raise HTTPException(
+            status_code=404,
+            detail="User already created!"
+        )
+    
+    hashed_password = get_pwd_hash(user.password)
+    db_user = User(
+        name=user.name,
+        email=user.email,
+        role=user.role,
+        hashed_pwd=hashed_password
     )
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> UserInDB:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-        token_data = TokenData(username=username)
-    except JWTError:
-        raise credentials_exception
-
-    user = get_user(db, token_data.username or "")
-    if user is None:
-        raise credentials_exception
-    return user
-
-
-async def get_current_active_user(
-    current_user: Annotated[UserInDB, Depends(get_current_user)],
-) -> UserInDB:
-    if current_user.disabled:
-        raise HTTPException(status_code=400, detail="Inactive user")
-    return current_user
-
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
 
 @app.post("/token", response_model=Token)
-async def login_for_access_token(
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-):
-    user = authenticate_user(db, form_data.username, form_data.password)
-    if not user:
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session=Depends(get_db)):
+    user = db.query(User).filter(User.email == form_data.username).first()
+
+    if not user or not verify_pwd(form_data.password, user.hashed_pwd):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            status_code=404,
+            detail="Wrong info!"
         )
-
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=404,
+            detail="Inactive User!"
+        )
+    
+    access_token_expires = timedelta(minutes=TOKEN_EXPIRES)
     access_token = create_access_token(
-        data={"sub": user.username},
-        expires_delta=access_token_expires,
+        data={"sub": user.email}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type":"bearer"}
 
+# API Endpoints (CRUD Operations)
+@app.get("/")
+def root():
+    return {"message":"Welcome to User Preferences and Accounts Service"}
 
-@app.get("/users/me", response_model=User)
-async def read_users_me(
-    current_user: Annotated[UserInDB, Depends(get_current_active_user)],
-):
+@app.get("/profile/", response_model=UserResponse)
+def get_profile(current_user:User = Depends(get_current_active_user)):
     return current_user
 
+@app.get("/verify-token/")
+def verify_token_endpoint(current_user:User = Depends(get_current_active_user)):
+    return {
+        "valid" : True,
+        "user": {
+            "id": current_user.id,
+            "name": current_user.name,
+            "email": current_user.email,
+            "role": current_user.role
+        }
+    }
 
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
+# Get user
+@app.get("/users/{user_id}", response_model=UserResponse)
+def get_user(user_id:int, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
 
-@app.post("/auth/register")
-def register():
-    return {"message": "TODO: /auth/register not implemented yet"}
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-@app.post("/auth/login")
-def login():
-    return {"message": "TODO: /auth/login not implemented yet"}
+    return user
 
-@app.post("/auth/logout")
-def logout():
-    return {"message": "TODO: /auth/logout not implemented yet"}
+# Create User
+@app.post("/users/", response_model=UserResponse)
+def create_user(user: UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    
+    if db.query(User).filter(User.email == user.email).first():
+        raise HTTPException(status_code=404, detail="User already exists!")
 
-@app.post("/auth/reset-password")
-def reset_password():
-    return {"message": "TODO: /auth/reset-password not implemented yet"}
+    hashed_password = get_pwd_hash(user.password)
+    db_user = User (
+        name=user.name,
+        email=user.email,
+        role=user.role,
+        hashed_pwd=hashed_password
+    )
 
-@app.get("/user/profile/{id}")
-def get_profile(id: str):
-    return {"message": "TODO: /user/profile/{id} not implemented yet", "id": id}
+    db.add(db_user)
+    db.commit() # send the info
+    db.refresh(db_user)
+    return db_user
 
-@app.patch("/user/profile/edit")
-def edit_profile():
-    return {"message": "TODO: /user/profile/edit not implemented yet"}
+# Update user
+@app.put("/user/{user_id}", response_model=UserResponse)
+def update_user(user_id:int, update_user:UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == user_id).first()
 
-@app.patch("/user/settings/privacy")
-def update_privacy_settings():
-    return {"message": "TODO: /user/settings/privacy not implemented yet"}
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User does not exist")
+    
+    db_user.name = update_user.name
+    db_user.email = update_user.email
+    db_user.role = update_user.role
 
-@app.patch("/user/settings/notifications")
-def update_notification_settings():
-    return {"message": "TODO: /user/settings/notifications not implemented yet"}
 
-@app.patch("/user/settings/ui")
-def update_ui_settings():
-    return {"message": "TODO: /user/settings/ui not implemented yet"}
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+
+
+
+# Delete user
+@app.delete("/users/{user_id}")
+def delete(user_id:int, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == user_id).first()
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User does not exist")
+    
+    if db_user.id == current_user.id:
+        raise HTTPException(status_code=404, detail="You cannot delete yourself!")
+
+    db.delete(db_user)
+    db.commit()
+    return {"message":"User deleted!"}
+
+
+# Get all users
+@app.get("/users/", response_model=List[UserResponse])
+def get_all_users(current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    return db.query(User).all()
+
 
 
 
