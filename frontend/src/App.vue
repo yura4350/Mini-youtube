@@ -4,6 +4,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { fetchNotifications } from '@/services/notifications'
+import { fetchSearchSuggestions } from '@/services/dashboard'
 import { authService } from '@/services/auth'
 import type { NotificationItem } from '@/types/notification'
 import type { User } from '@/types/auth'
@@ -12,6 +13,9 @@ const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 const searchInput = ref('')
+const suggestions = ref<string[]>([])
+const showSuggestions = ref(false)
+let suggestionsDebounce: ReturnType<typeof setTimeout> | null = null
 const unreadNotificationCount = ref(0)
 const notificationOpen = ref(false)
 const notificationLoading = ref(false)
@@ -128,9 +132,35 @@ function logout() {
   router.push('/login')
 }
 
+function onSearchInput() {
+  const q = searchInput.value.trim()
+  if (suggestionsDebounce) clearTimeout(suggestionsDebounce)
+  if (!q) {
+    suggestions.value = []
+    showSuggestions.value = false
+    return
+  }
+  suggestionsDebounce = setTimeout(async () => {
+    try {
+      suggestions.value = await fetchSearchSuggestions(q)
+      showSuggestions.value = suggestions.value.length > 0
+    } catch {
+      suggestions.value = []
+      showSuggestions.value = false
+    }
+  }, 200)
+}
+
+function selectSuggestion(s: string) {
+  searchInput.value = s
+  showSuggestions.value = false
+  router.push({ name: 'search', query: { q: s } })
+}
+
 function submitSearch() {
   const keyword = searchInput.value.trim()
   if (!keyword) return
+  showSuggestions.value = false
   router.push({ name: 'search', query: { q: keyword } })
 }
 </script>
@@ -144,7 +174,23 @@ function submitSearch() {
       </RouterLink>
 
       <form v-if="showSearch" class="searchbar" @submit.prevent="submitSearch">
-        <input v-model="searchInput" type="text" placeholder="Search videos" />
+        <div class="search-input-wrap">
+          <input
+            v-model="searchInput"
+            type="text"
+            placeholder="Search videos"
+            autocomplete="off"
+            @input="onSearchInput"
+            @blur="showSuggestions = false"
+          />
+          <ul v-if="showSuggestions" class="suggestions-list">
+            <li
+              v-for="s in suggestions"
+              :key="s"
+              @mousedown.prevent="selectSuggestion(s)"
+            >{{ s }}</li>
+          </ul>
+        </div>
         <button type="submit" class="search-btn"><AppIcon name="search" :size="16" /> Search</button>
       </form>
 
@@ -250,12 +296,44 @@ function submitSearch() {
   margin: 0 16px;
 }
 
+.search-input-wrap {
+  position: relative;
+}
+
 .searchbar input {
+  width: 100%;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: #121212;
   color: #fff;
   padding: 9px 14px;
+}
+
+.suggestions-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  z-index: 20;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.suggestions-list li {
+  padding: 8px 14px;
+  color: #d4d7de;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.suggestions-list li:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 .searchbar button {
