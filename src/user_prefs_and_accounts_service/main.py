@@ -149,7 +149,140 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Auth Endpoints
+@app.post("/register", response_model=UserResponse)
+def register_user(user: UserCreate, db: Session = Depends(get_db)):
+    if db.query(User).filter(User.email == user.email).first():
+        raise HTTPException(
+            status_code=404,
+            detail="User already created!"
+        )
+    
+    hashed_password = get_pwd_hash(user.password)
+    db_user = User(
+        name=user.name,
+        email=user.email,
+        role=user.role,
+        hashed_pwd=hashed_password
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
 
+@app.post("/token", response_model=Token)
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session=Depends(get_db)):
+    user = db.query(User).filter(User.email == form_data.username).first()
+
+    if not user or not verify_pwd(form_data.password, user.hashed_pwd):
+        raise HTTPException(
+            status_code=404,
+            detail="Wrong info!"
+        )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=404,
+            detail="Inactive User!"
+        )
+    
+    access_token_expires = timedelta(minutes=TOKEN_EXPIRES)
+    access_token = create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type":"bearer"}
+
+# API Endpoints (CRUD Operations)
+@app.get("/")
+def root():
+    return {"message":"Welcome to User Preferences and Accounts Service"}
+
+@app.get("/profile/", response_model=UserResponse)
+def get_profile(current_user:User = Depends(get_current_active_user)):
+    return current_user
+
+@app.get("/verify-token/")
+def verify_token_endpoint(current_user:User = Depends(get_current_active_user)):
+    return {
+        "valid" : True,
+        "user": {
+            "id": current_user.id,
+            "name": current_user.name,
+            "email": current_user.email,
+            "role": current_user.role
+        }
+    }
+
+# Get user
+@app.get("/users/{user_id}", response_model=UserResponse)
+def get_user(user_id:int, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return user
+
+# Create User
+@app.post("/users/", response_model=UserResponse)
+def create_user(user: UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    
+    if db.query(User).filter(User.email == user.email).first():
+        raise HTTPException(status_code=404, detail="User already exists!")
+
+    hashed_password = get_pwd_hash(user.password)
+    db_user = User (
+        name=user.name,
+        email=user.email,
+        role=user.role,
+        hashed_pwd=hashed_password
+    )
+
+    db.add(db_user)
+    db.commit() # send the info
+    db.refresh(db_user)
+    return db_user
+
+# Update user
+@app.put("/user/{user_id}", response_model=UserResponse)
+def update_user(user_id:int, update_user:UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == user_id).first()
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User does not exist")
+    
+    db_user.name = update_user.name
+    db_user.email = update_user.email
+    db_user.role = update_user.role
+
+
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+
+
+
+# Delete user
+@app.delete("/users/{user_id}")
+def delete(user_id:int, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == user_id).first()
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User does not exist")
+    
+    if db_user.id == current_user.id:
+        raise HTTPException(status_code=404, detail="You cannot delete yourself!")
+
+    db.delete(db_user)
+    db.commit()
+    return {"message":"User deleted!"}
+
+
+# Get all users
+@app.get("/users/", response_model=List[UserResponse])
+def get_all_users(current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    return db.query(User).all()
 
 
 
