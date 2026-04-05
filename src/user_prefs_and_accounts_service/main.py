@@ -248,7 +248,7 @@ def update_user(user_id:int, update_user:UserCreate, current_user:User = Depends
     db_user.name = update_user.name
     db_user.email = update_user.email
     db_user.role = update_user.role
-    db_user_bio = update_user.bio
+    db_user.bio = update_user.bio
 
 
     db.commit()
