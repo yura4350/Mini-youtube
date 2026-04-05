@@ -24,7 +24,7 @@ TOKEN_EXPIRES = 30
 
 # password hashing (bcrypt)
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 # Database setup
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -177,7 +177,7 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(db_user)
     return db_user
 
-@app.post("/auth/login", response_model=Token)
+@app.post("/auth/login/", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session=Depends(get_db)):
     user = db.query(User).filter(User.email == form_data.username).first()
 
@@ -232,10 +232,27 @@ def get_user(user_id:int, current_user:User = Depends(get_current_active_user), 
 
     return user
 
-# Update user
+# Update any user (should be removed in the future)
 @app.put("/user/{user_id}", response_model=UserResponse)
 def update_user(user_id:int, update_user:UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
     db_user = db.query(User).filter(User.id == user_id).first()
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User does not exist")
+    
+    db_user.name = update_user.name
+    db_user.email = update_user.email
+    db_user.role = update_user.role
+
+
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+# Endpoint to let user update himself
+@app.put("/user/profile/edit", response_model=UserResponse)
+def update_user(update_user:UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == current_user.id).first()
 
     if not db_user:
         raise HTTPException(status_code=404, detail="User does not exist")
