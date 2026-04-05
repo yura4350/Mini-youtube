@@ -13,8 +13,13 @@ from datetime import datetime, timedelta
 
 from fastapi.middleware.cors import CORSMiddleware
 
-SECRET_KEY = "fc42e6a3e2c0cd478aaea480e41fdcc1d4bb802c7d41fccbff59465f6945f190"
-ALGORITHM = "HS256"
+import os
+from dotenv import load_dotenv
+
+load_dotenv() # Load the variables from .env file
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
 TOKEN_EXPIRES = 30
 
 # password hashing (bcrypt)
