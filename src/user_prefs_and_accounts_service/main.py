@@ -157,7 +157,7 @@ app.add_middleware(
 )
 
 # Auth Endpoints
-@app.post("/register", response_model=UserResponse)
+@app.post("/auth/register", response_model=UserResponse)
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == user.email).first():
         raise HTTPException(
