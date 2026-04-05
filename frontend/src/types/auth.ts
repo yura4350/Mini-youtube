@@ -34,3 +34,18 @@ export interface AuthResult {
   message: string
   user: User | null
 }
+
+
+// Define the shape of the JSON data FastAPI backend returns
+export interface BackendUser { // mathches UserResponse
+  id: number
+  name: string
+  email: string
+  role: string
+  is_active: boolean
+}
+
+export interface BackendToken { // matches Token
+  access_token: string
+  token_type: string
+}
