@@ -33,7 +33,7 @@ async function onSubmit() {
   loading.value = true
   await new Promise((resolve) => setTimeout(resolve, 350))
 
-  const result = authStore.register({
+  const result = await authStore.register({
     username: form.username,
     email: form.email,
     password: form.password,
