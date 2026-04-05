@@ -177,7 +177,7 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(db_user)
     return db_user
 
-@app.post("/token", response_model=Token)
+@app.post("/auth/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session=Depends(get_db)):
     user = db.query(User).filter(User.email == form_data.username).first()
 
