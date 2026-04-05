@@ -230,26 +230,6 @@ def get_user(user_id:int, current_user:User = Depends(get_current_active_user), 
 
     return user
 
-# Create User
-@app.post("/users/", response_model=UserResponse)
-def create_user(user: UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
-    
-    if db.query(User).filter(User.email == user.email).first():
-        raise HTTPException(status_code=404, detail="User already exists!")
-
-    hashed_password = get_pwd_hash(user.password)
-    db_user = User (
-        name=user.name,
-        email=user.email,
-        role=user.role,
-        hashed_pwd=hashed_password
-    )
-
-    db.add(db_user)
-    db.commit() # send the info
-    db.refresh(db_user)
-    return db_user
-
 # Update user
 @app.put("/user/{user_id}", response_model=UserResponse)
 def update_user(user_id:int, update_user:UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
