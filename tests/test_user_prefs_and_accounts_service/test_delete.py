@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 # Must be set before importing service module
 os.environ["DATABASE_URL"] = "sqlite://"
 
-from src.user_prefs_and_accounts_service.main import (  # noqa: E402
+from src.user_prefs_and_accounts_service.main import (
     Base,
     User,
     app,
