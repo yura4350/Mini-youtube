@@ -68,7 +68,7 @@ services:
 
   user-accounts-prefs:
     build:
-      context:
+      context: .
       dockerfile: Dockerfile
     container_name: user_accounts_and_preferences
     restart: unless-stopped
