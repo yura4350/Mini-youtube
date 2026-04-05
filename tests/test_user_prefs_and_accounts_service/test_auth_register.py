@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Critical: set before importing app module
+# set before importing app module
 os.environ["DATABASE_URL"] = "sqlite://"
 
 from src.user_prefs_and_accounts_service.main import Base, User, app, get_db
