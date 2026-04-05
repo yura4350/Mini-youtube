@@ -66,6 +66,25 @@ services:
       - "8002:8002"
     command: ["uvicorn", "src.communication_service.main:app", "--host", "0.0.0.0", "--port", "8002"]
 
+  user-accounts-prefs:
+    build:
+      context:
+      dockerfile: Dockerfile
+    container_name: user_accounts_and_preferences
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ./src/user_prefs_and_accounts_service/.env
+    environment:
+      DATABASE_URL: postgresql://media_user:media_pass@db:5432/media_db
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8003:8003"
+    command: ["uvicorn", "src.user_prefs_and_accounts_service.main:app", "--host", "0.0.0.0", "--port", "8003"]
+
+
   frontend:
     image: node:20-alpine
     container_name: media_server_frontend
