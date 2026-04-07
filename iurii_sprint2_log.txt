@@ -1,9 +1,0 @@
-user_accounts_and_preferences  | INFO:     172.19.0.1:57382 - "POST /auth/login/ HTTP/1.1" 200 OK
-user_accounts_and_preferences  | INFO:     172.19.0.1:57382 - "GET /profile/ HTTP/1.1" 200 OK
-media_server_communication     | INFO:     172.19.0.1:55870 - "GET /comm/notifications?user_id=3&unread_only=true&limit=200&offset=0 HTTP/1.1" 200 OK
-media_server_api               | INFO:     172.19.0.1:57738 - "GET /videos HTTP/1.1" 200 OK
-user_accounts_and_preferences  | INFO:     172.19.0.1:58448 - "POST /auth/register HTTP/1.1" 200 OK
-user_accounts_and_preferences  | INFO:     172.19.0.1:58448 - "POST /auth/login/ HTTP/1.1" 200 OK
-user_accounts_and_preferences  | INFO:     172.19.0.1:58448 - "GET /profile/ HTTP/1.1" 200 OK
-media_server_communication     | INFO:     172.19.0.1:57872 - "GET /comm/notifications?user_id=4&unread_only=true&limit=200&offset=0 HTTP/1.1" 200 OK
-media_server_api               | INFO:     172.19.0.1:62946 - "GET /videos HTTP/1.1" 200 OK
