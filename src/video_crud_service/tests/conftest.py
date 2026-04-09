@@ -1,14 +1,10 @@
-import os
-import sqlite3
-import tempfile
 from io import BytesIO
-from pathlib import Path
 from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -42,6 +38,7 @@ def test_db():
     yield db_session
     db_session.close()
     app.dependency_overrides.clear()
+    engine.dispose()
 
 
 @pytest.fixture
@@ -60,7 +57,7 @@ def sample_video_file():
     return BytesIO(mp4_header)
 
 
-def create_test_video(db, title="Test Video", uploader_id=1):
+def create_test_video(db, title="Test Video", uploader_id=1, path="/tmp/test.mp4", views=0):
     """Helper to create a video in the database."""
     video = Video(
         id=str(uuid4()),
@@ -74,11 +71,11 @@ def create_test_video(db, title="Test Video", uploader_id=1):
         saved_filename="test_saved.mp4",
         content_type="video/mp4",
         size=1024,
-        path="/tmp/test.mp4",
-        views=0,
+        path=path,
+        views=views,
         likes=0,
         duration_seconds=60,
-            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
     db.add(video)
     db.commit()
