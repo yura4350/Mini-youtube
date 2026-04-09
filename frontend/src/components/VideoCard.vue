@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 import type { VideoItem } from '@/types/video'
-import { formatViews, timeAgo } from '@/services/mock-videos'
+import { formatViews, timeAgo } from '@/services/video-format'
 import AppIcon from '@/components/icons/AppIcon.vue'
 
 defineProps<{ video: VideoItem }>()
