@@ -1,9 +1,18 @@
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from .videos import router as videos_router
 from .database import init_db
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Retry DB init to handle startup timing and DNS delays in containers.
+    init_db()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -13,13 +22,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-def on_startup():
-    # Retry DB init to handle startup timing and DNS delays in containers.
-    init_db()
-
 @app.get("/health")
 def read_root():
-    return {"Status": "Active"}
-
+    return {"status":"ok","service":"videos"}
+    
 app.include_router(videos_router)
