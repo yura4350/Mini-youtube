@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from src.video_crud_service.database import SessionLocal, init_db
 from src.video_crud_service.models import Video
 from src.video_crud_service.videos import serialize_video
-from src.dashboard_service.models import SearchHistory, WatchHistory
+from src.communication_service.models import Notification
+from src.dashboard_service.models import SearchHistory, WatchHistory, Subscription
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -103,12 +104,25 @@ def search_history(
 
 
 @app.get("/subscriptions/feed")
-def subscriptions_feed(user_id: str = Query(...)):
-    """Return latest videos from channels the user subscribes to, in chronological order.
-    TODO: implement once user DB is available
-    """
+def subscriptions_feed(
+    user_id: str = Query(...),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Return latest videos from channels the user subscribes to, in reverse chronological order."""
     logger.info("Subscriptions feed requested for user %s", user_id)
-    return {"user_id": user_id, "videos": []}
+    subs = db.query(Subscription).filter(Subscription.subscriber_user_id == user_id).all()
+    channel_ids = [s.channel_user_id for s in subs]
+    if not channel_ids:
+        return {"user_id": user_id, "videos": []}
+    videos = (
+        db.query(Video)
+        .filter(Video.uploader_id.in_([int(c) for c in channel_ids]))
+        .order_by(Video.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return {"user_id": user_id, "videos": [serialize_video(v) for v in videos]}
 
 
 @app.post("/user/history/watched")
@@ -175,12 +189,35 @@ def watched_history(
 
 
 @app.get("/user/notifications")
-def notifications(user_id: str = Query(...)):
-    """Return recent notifications (read/unread) for a user.
-    TODO: implement once user DB is available.
-    """
+def notifications(
+    user_id: str = Query(...),
+    unread_only: bool = Query(False),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """Return recent notifications (read/unread) for a user in reverse chronological order."""
     logger.info("Notifications requested for user %s", user_id)
-    return {"user_id": user_id, "notifications": []}
+    query = db.query(Notification).filter(Notification.recipient_user_id == user_id)
+    if unread_only:
+        query = query.filter(Notification.is_read.is_(False))
+    rows = query.order_by(Notification.created_at.desc()).limit(limit).all()
+    return {
+        "user_id": user_id,
+        "notifications": [
+            {
+                "notification_id": r.notification_id,
+                "type": r.type,
+                "title": r.title,
+                "message": r.message,
+                "actor_user_id": r.actor_user_id,
+                "video_id": r.video_id,
+                "is_read": r.is_read,
+                "read_at": r.read_at.isoformat() if r.read_at else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ],
+    }
 
 
 @app.get("/dashboard/recommend")
