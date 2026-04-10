@@ -1,47 +1,41 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import VideoCard from '@/components/VideoCard.vue'
-import { fetchVideos } from '@/services/videos'
+import { searchVideos } from '@/services/dashboard'
 import type { VideoItem } from '@/types/video'
 
 const route = useRoute()
-const videos = ref<VideoItem[]>([])
+const results = ref<VideoItem[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 
 const query = computed(() => String(route.query.q || '').trim())
 
-const results = computed(() => {
-  if (!query.value) return []
-  const q = query.value.toLowerCase()
-  return videos.value.filter((video) => {
-    return (
-      video.title.toLowerCase().includes(q) ||
-      video.description.toLowerCase().includes(q) ||
-      video.authorName.toLowerCase().includes(q) ||
-      video.category.toLowerCase().includes(q) ||
-      video.tags.some((tag) => tag.toLowerCase().includes(q))
-    )
-  })
-})
-
-async function loadVideos() {
+async function loadResults(q: string) {
+  if (!q) {
+    results.value = []
+    return
+  }
   loading.value = true
   errorMessage.value = ''
 
   try {
-    videos.value = await fetchVideos()
+    results.value = await searchVideos(q)
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Failed to load videos'
+    errorMessage.value = error instanceof Error ? error.message : 'Failed to load results'
   } finally {
     loading.value = false
   }
 }
 
 onMounted(() => {
-  loadVideos()
+  loadResults(query.value)
+})
+
+watch(query, (q) => {
+  loadResults(q)
 })
 </script>
 

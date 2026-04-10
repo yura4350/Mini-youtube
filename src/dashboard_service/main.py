@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import FastAPI, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,15 +7,19 @@ from sqlalchemy.orm import Session
 
 from src.video_crud_service.database import SessionLocal
 from src.video_crud_service.models import Video
+from src.video_crud_service.videos import serialize_video
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Dashboard Service")
 
+_default_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+_extra_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=_default_origins + _extra_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -29,15 +34,6 @@ def get_db():
         db.close()
 
 
-def _video_summary(v: Video) -> dict:
-    return {
-        "id": v.id,
-        "title": v.title,
-        "uploader_id": v.uploader_id,
-        "content_type": v.content_type,
-        "size": v.size,
-        "created_at": v.created_at.isoformat() if v.created_at else None,
-    }
 
 
 @app.get("/health")
@@ -53,7 +49,7 @@ def search(q: str = Query(..., min_length=1), db: Session = Depends(get_db)):
     """
     logger.info("Search requested: %s", q)
     videos = db.query(Video).filter(Video.title.ilike(f"%{q}%")).all()
-    return {"query": q, "results": [_video_summary(v) for v in videos]}
+    return {"query": q, "results": [serialize_video(v) for v in videos]}
 
 
 @app.get("/search/suggestions")
@@ -110,4 +106,4 @@ def recommend(db: Session = Depends(get_db)):
     """
     logger.info("Recommend requested")
     videos = db.query(Video).order_by(Video.created_at.desc()).all()
-    return {"videos": [_video_summary(v) for v in videos]}
+    return {"videos": [serialize_video(v) for v in videos]}
