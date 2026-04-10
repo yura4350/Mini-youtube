@@ -111,13 +111,67 @@ def subscriptions_feed(user_id: str = Query(...)):
     return {"user_id": user_id, "videos": []}
 
 
-@app.get("/user/history/watched")
-def watched_history(user_id: str = Query(...)):
-    """Return recently watched videos for a user in reverse chronological order.
-    TODO: implement once user DB is available.
+@app.post("/user/history/watched")
+def record_watch(
+    user_id: str = Query(...),
+    video_id: str = Query(...),
+    position_seconds: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """Record or update a watch event for a user.
+       Upserts: if the user has watched this video before, updates last_watched_at and last_position_seconds.
     """
+    logger.info("Recording watch for user %s, video %s", user_id, video_id)
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    row = db.query(WatchHistory).filter(
+        WatchHistory.user_id == user_id,
+        WatchHistory.video_id == video_id,
+    ).first()
+
+    if row:
+        row.last_watched_at = datetime.now(timezone.utc)
+        row.last_position_seconds = position_seconds
+    else:
+        db.add(WatchHistory(
+            user_id=user_id,
+            video_id=video_id,
+            last_position_seconds=position_seconds,
+            last_watched_at=datetime.now(timezone.utc),
+        ))
+    db.commit()
+    return {"status": "recorded", "user_id": user_id, "video_id": video_id}
+
+
+@app.get("/user/history/watched")
+def watched_history(
+    user_id: str = Query(...),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Return recently watched videos for a user in reverse chronological order."""
     logger.info("Watch history requested for user %s", user_id)
-    return {"user_id": user_id, "videos": []}
+    rows = (
+        db.query(WatchHistory)
+        .filter(WatchHistory.user_id == user_id)
+        .order_by(WatchHistory.last_watched_at.desc())
+        .limit(limit)
+        .all()
+    )
+    video_ids = [r.video_id for r in rows]
+    videos_by_id = {
+        v.id: v for v in db.query(Video).filter(Video.id.in_(video_ids)).all()
+    }
+    result = []
+    for r in rows:
+        if r.video_id in videos_by_id:
+            video_data = serialize_video(videos_by_id[r.video_id])
+            video_data["last_watched_at"] = r.last_watched_at.isoformat()
+            video_data["last_position_seconds"] = r.last_position_seconds
+            result.append(video_data)
+    return {"user_id": user_id, "videos": result}
 
 
 @app.get("/user/notifications")
