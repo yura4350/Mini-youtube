@@ -79,12 +79,27 @@ def search_suggestions(q: str = Query(..., min_length=1), db: Session = Depends(
 
 
 @app.get("/search/history")
-def search_history(user_id: str = Query(...)):
-    """Return recent search queries for a user.
-    TODO: implement once user DB is available.
-    """
+def search_history(
+    user_id: str = Query(...),
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """Return recent search queries for a user in reverse order."""
     logger.info("Search history requested for user %s", user_id)
-    return {"user_id": user_id, "history": []}
+    rows = (
+        db.query(SearchHistory)
+        .filter(SearchHistory.user_id == user_id)
+        .order_by(SearchHistory.searched_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "user_id": user_id,
+        "history": [
+            {"query": r.query, "searched_at": r.searched_at.isoformat()}
+            for r in rows
+        ],
+    }
 
 
 @app.get("/subscriptions/feed")
