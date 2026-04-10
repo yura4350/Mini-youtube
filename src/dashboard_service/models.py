@@ -1,5 +1,4 @@
 from datetime import datetime
-from time import timezone
 
 from sqlalchemy import Column, Integer, String, DateTime
 
@@ -12,4 +11,4 @@ class SearchHistory(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(String, nullable=False, index=True)
     query = Column(String, nullable=False)
-    searched_at = Column(DateTime, default=datetime.now(timezone.utc), nullable=False)
+    searched_at = Column(DateTime, default=datetime.utcnow, nullable=False)

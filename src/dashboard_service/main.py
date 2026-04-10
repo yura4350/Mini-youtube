@@ -47,13 +47,23 @@ def health():
 
 
 @app.get("/search")
-def search(q: str = Query(..., min_length=1), db: Session = Depends(get_db)):
+def search(
+    q: str = Query(..., min_length=1),
+    user_id: str = Query(None),
+    db: Session = Depends(get_db),
+):
     """Filter and rank videos by keyword match on title.
        Called when the user submits a search query.
+       If user_id is provided, the query is recorded in search history.
        Returns full video objects for all matches.
     """
     logger.info("Search requested: %s", q)
     videos = db.query(Video).filter(Video.title.ilike(f"%{q}%")).all()
+
+    if user_id:
+        db.add(SearchHistory(user_id=user_id, query=q, searched_at=datetime.now(timezone.utc)))
+        db.commit()
+
     return {"query": q, "results": [serialize_video(v) for v in videos]}
 
 
