@@ -104,6 +104,12 @@
 - `last_watched_at`
 - unique constraint: (`user_id`, `video_id`)
 
+### `search_history`
+- `id` (PK, auto-increment)
+- `user_id` (FK -> users.id, indexed)
+- `query` (text, not null)
+- `searched_at`
+
 ### `video_engagement_daily` (optional analytics table)
 - `video_id`
 - `date`
