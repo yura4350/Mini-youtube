@@ -1,13 +1,15 @@
 import logging
 import os
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from src.video_crud_service.database import SessionLocal
+from src.video_crud_service.database import SessionLocal, init_db
 from src.video_crud_service.models import Video
 from src.video_crud_service.videos import serialize_video
+from src.dashboard_service.models import SearchHistory
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,6 +36,9 @@ def get_db():
         db.close()
 
 
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
 
 @app.get("/health")
