@@ -40,10 +40,10 @@
 ## Subscriptions & Preferences
 
 ### `subscriptions`
-- `subscriber_user_id` (FK -> users.id)
-- `channel_user_id` (FK -> users.id)
+- `subscriber_user_id` (PK, FK -> users.id, indexed)
+- `channel_user_id` (PK, FK -> users.id)
 - `created_at`
-- unique constraint: (`subscriber_user_id`, `channel_user_id`)
+- primary key: (`subscriber_user_id`, `channel_user_id`)
 
 ### `user_settings`
 - `user_id` (PK, FK -> users.id)

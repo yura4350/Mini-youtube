@@ -25,3 +25,11 @@ class WatchHistory(Base):
 
     # Ensure a user can only have one watch history entry per video
     __table_args__ = (UniqueConstraint("user_id", "video_id", name="uq_watch_history_user_video"),)
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    subscriber_user_id = Column(String, primary_key=True, nullable=False, index=True)
+    channel_user_id = Column(String, primary_key=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
