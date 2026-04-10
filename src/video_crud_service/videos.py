@@ -173,6 +173,13 @@ def play_video(video_id: str, db: Session = Depends(get_db)):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Stored file not found")
 
+    # Atomic increment avoids lost updates under concurrent requests.
+    db.query(Video).filter(Video.id == video_id).update(
+        {Video.views: Video.views + 1},
+        synchronize_session=False,
+    )
+    db.commit()
+
     return FileResponse(
         path=str(file_path),
         media_type=video.content_type,

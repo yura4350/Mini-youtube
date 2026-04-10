@@ -19,7 +19,7 @@ async function onSubmit() {
   errorMessage.value = ''
 
   await new Promise((resolve) => setTimeout(resolve, 350))
-  const result = authStore.login({ email: form.email, password: form.password })
+  const result = await authStore.login({ email: form.email, password: form.password })
 
   loading.value = false
   if (!result.ok) {
