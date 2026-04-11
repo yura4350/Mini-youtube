@@ -5,6 +5,7 @@ import AppIcon from '@/components/icons/AppIcon.vue'
 import VideoCard from '@/components/VideoCard.vue'
 import { searchVideos } from '@/services/dashboard'
 import type { VideoItem } from '@/types/video'
+import { fetchSearchHistory } from '@/services/dashboard'
 
 const route = useRoute()
 const results = ref<VideoItem[]>([])
@@ -37,6 +38,17 @@ onMounted(() => {
 watch(query, (q) => {
   loadResults(q)
 })
+
+const searchHistory = ref([])
+
+onMounted(async () => {
+  try {
+    const userId = 'example-user-id' // Replace with actual user ID logic
+    searchHistory.value = await fetchSearchHistory(userId)
+  } catch (error) {
+    console.error('Failed to fetch search history:', error)
+  }
+})
 </script>
 
 <template>
@@ -61,6 +73,15 @@ watch(query, (q) => {
     <section v-else class="empty-state">
       <AppIcon name="empty" :size="18" />
       <p>No videos matched your search.</p>
+    </section>
+
+    <section>
+      <h2>Your Search History</h2>
+      <ul>
+        <li v-for="item in searchHistory" :key="item.searched_at">
+          {{ item.query }} ({{ new Date(item.searched_at).toLocaleString() }})
+        </li>
+      </ul>
     </section>
   </main>
 </template>
