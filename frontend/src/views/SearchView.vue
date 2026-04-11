@@ -6,6 +6,7 @@ import VideoCard from '@/components/VideoCard.vue'
 import { searchVideos } from '@/services/dashboard'
 import type { VideoItem } from '@/types/video'
 import { fetchSearchHistory } from '@/services/dashboard'
+import type { SearchHistoryItem } from '@/types/video'
 
 const route = useRoute()
 const results = ref<VideoItem[]>([])
@@ -39,7 +40,7 @@ watch(query, (q) => {
   loadResults(q)
 })
 
-const searchHistory = ref([])
+const searchHistory = ref<SearchHistoryItem[]>([])
 
 onMounted(async () => {
   try {
