@@ -1,7 +1,7 @@
 import { mapVideoApiItemToVideoItem, type VideoApiItem, type VideoItem } from '@/types/video'
 
 const DASHBOARD_API_BASE_URL = (
-  import.meta.env.VITE_DASHBOARD_API_BASE_URL || 'http://localhost:8003'
+  import.meta.env.VITE_DASHBOARD_API_BASE_URL || 'http://localhost:8004'
 ).replace(/\/$/, '')
 
 async function parseError(response: Response): Promise<string> {
@@ -135,4 +135,39 @@ export async function fetchSubscriptionsFeed(userId: string, limit: number = 20)
 
   const payload = (await response.json()) as { user_id: string; videos: VideoApiItem[] }
   return payload.videos.map(mapVideoApiItemToVideoItem)
+}
+
+export async function fetchSubscribedChannelIds(userId: string): Promise<string[]> {
+  const response = await fetch(
+    `${DASHBOARD_API_BASE_URL}/subscriptions?user_id=${encodeURIComponent(userId)}`,
+  )
+
+  if (!response.ok) {
+    throw new Error(await parseError(response))
+  }
+
+  const payload = (await response.json()) as { user_id: string; channel_user_ids: string[] }
+  return payload.channel_user_ids
+}
+
+export async function subscribeToChannel(subscriberUserId: string, channelUserId: string): Promise<void> {
+  const response = await fetch(
+    `${DASHBOARD_API_BASE_URL}/subscriptions?subscriber_user_id=${encodeURIComponent(subscriberUserId)}&channel_user_id=${encodeURIComponent(channelUserId)}`,
+    { method: 'POST' },
+  )
+
+  if (!response.ok) {
+    throw new Error(await parseError(response))
+  }
+}
+
+export async function unsubscribeFromChannel(subscriberUserId: string, channelUserId: string): Promise<void> {
+  const response = await fetch(
+    `${DASHBOARD_API_BASE_URL}/subscriptions?subscriber_user_id=${encodeURIComponent(subscriberUserId)}&channel_user_id=${encodeURIComponent(channelUserId)}`,
+    { method: 'DELETE' },
+  )
+
+  if (!response.ok) {
+    throw new Error(await parseError(response))
+  }
 }

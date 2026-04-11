@@ -27,6 +27,7 @@ services:
     environment:
       DATABASE_URL: postgresql://media_user:media_pass@db:5432/media_db
       PYTHONUNBUFFERED: "1"
+      COMMUNICATION_API_BASE_URL: http://communication:8002
     ports:
       - "8000:8000"
     volumes:

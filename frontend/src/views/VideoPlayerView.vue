@@ -6,7 +6,7 @@ import AppIcon from '@/components/icons/AppIcon.vue'
 import { formatViews } from '@/services/video-format'
 import { fetchVideoById, fetchVideos, updateVideo, deleteVideo } from '@/services/videos'
 import { toApiUploaderId } from '@/services/user-id'
-import { recordWatchEvent } from '@/services/dashboard'
+import { recordWatchEvent, fetchSubscribedChannelIds, subscribeToChannel, unsubscribeFromChannel } from '@/services/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import type { VideoItem } from '@/types/video'
 
@@ -22,6 +22,9 @@ const isEditing = ref(false)
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const editMessage = ref('')
+const subscribeLoading = ref(false)
+const subscribeMessage = ref('')
+const subscribedChannelIds = ref<string[]>([])
 const chatMessages = ref<ChatMessage[]>([])
 const chatInput = ref('')
 const chatConnected = ref(false)
@@ -92,6 +95,19 @@ async function loadCurrentVideo() {
     errorMessage.value = error instanceof Error ? error.message : 'Failed to load video.'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadMySubscriptions() {
+  if (!authStore.currentUser) {
+    subscribedChannelIds.value = []
+    return
+  }
+
+  try {
+    subscribedChannelIds.value = await fetchSubscribedChannelIds(authStore.currentUser.id)
+  } catch {
+    subscribedChannelIds.value = []
   }
 }
 
@@ -220,6 +236,7 @@ const relatedVideos = computed(() => {
 
 onMounted(() => {
   loadCurrentVideo()
+  loadMySubscriptions()
 })
 
 onUnmounted(() => {
@@ -232,6 +249,16 @@ const isOwner = computed(() => {
   const currentUserUploaderId = toApiUploaderId(authStore.currentUser.id)
   if (currentUserUploaderId === null) return false
   return String(currentVideo.value.authorId) === String(currentUserUploaderId)
+})
+
+const canSubscribe = computed(() => {
+  if (!authStore.currentUser || !currentVideo.value) return false
+  return !isOwner.value
+})
+
+const isSubscribed = computed(() => {
+  if (!currentVideo.value) return false
+  return subscribedChannelIds.value.includes(String(currentVideo.value.authorId))
 })
 
 function startEditing() {
@@ -289,9 +316,44 @@ async function onDelete() {
   }
 }
 
+async function toggleSubscription() {
+  if (!authStore.currentUser || !currentVideo.value || isOwner.value) return
+
+  subscribeLoading.value = true
+  subscribeMessage.value = ''
+
+  const subscriberId = authStore.currentUser.id
+  const channelId = String(currentVideo.value.authorId)
+
+  try {
+    if (isSubscribed.value) {
+      await unsubscribeFromChannel(subscriberId, channelId)
+      subscribeMessage.value = 'Unsubscribed.'
+      subscribedChannelIds.value = subscribedChannelIds.value.filter((id) => id !== channelId)
+      if (authStore.currentUser) {
+        authStore.currentUser.subscribedTo = authStore.currentUser.subscribedTo.filter((id) => id !== channelId)
+      }
+    } else {
+      await subscribeToChannel(subscriberId, channelId)
+      subscribeMessage.value = 'Subscribed.'
+      if (!subscribedChannelIds.value.includes(channelId)) {
+        subscribedChannelIds.value = [...subscribedChannelIds.value, channelId]
+      }
+      if (authStore.currentUser && !authStore.currentUser.subscribedTo.includes(channelId)) {
+        authStore.currentUser.subscribedTo = [...authStore.currentUser.subscribedTo, channelId]
+      }
+    }
+  } catch (error) {
+    subscribeMessage.value = error instanceof Error ? error.message : 'Subscription update failed.'
+  } finally {
+    subscribeLoading.value = false
+  }
+}
+
 watch(
   () => route.params.id,
   () => {
+    subscribeMessage.value = ''
     stopRecordingWatchEvents()
     loadCurrentVideo()
   },
@@ -301,6 +363,7 @@ watch(
   () => [currentVideo.value?.id, authStore.currentUser?.id],
   () => {
     connectChat()
+    loadMySubscriptions()
   },
 )
 
@@ -335,14 +398,19 @@ watch(
         <span>•</span>
         <span><AppIcon name="clock" :size="14" /> {{ new Date(currentVideo.uploadDate).toLocaleDateString() }}</span>
       </p>
-      <div class="actions" v-if="isOwner">
-        <button v-if="!isEditing" @click="startEditing" class="btn-edit">
+      <div class="actions">
+        <button v-if="canSubscribe" @click="toggleSubscription" :disabled="subscribeLoading" class="btn-subscribe">
+          <AppIcon name="users" :size="14" />
+          {{ subscribeLoading ? 'Updating...' : isSubscribed ? 'Unsubscribe' : 'Subscribe' }}
+        </button>
+        <button v-if="isOwner && !isEditing" @click="startEditing" class="btn-edit">
           <AppIcon name="video" :size="14" /> Edit
         </button>
-        <button v-if="!isEditing" @click="onDelete" :disabled="isDeleting" class="btn-delete">
+        <button v-if="isOwner && !isEditing" @click="onDelete" :disabled="isDeleting" class="btn-delete">
           <AppIcon name="empty" :size="14" /> {{ isDeleting ? 'Deleting...' : 'Delete' }}
         </button>
       </div>
+      <p v-if="subscribeMessage" class="subscribe-message">{{ subscribeMessage }}</p>
 
       <div v-if="isEditing" class="edit-form">
         <h2>Edit Video</h2>
@@ -493,6 +561,7 @@ h1 {
 
 .btn-edit,
 .btn-delete,
+.btn-subscribe,
 .btn-save,
 .btn-cancel {
   display: inline-flex;
@@ -504,6 +573,26 @@ h1 {
   font-size: 14px;
   cursor: pointer;
   transition: background-color 150ms ease;
+}
+
+.btn-subscribe {
+  background: #f59e0b;
+  color: #111827;
+}
+
+.btn-subscribe:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.btn-subscribe:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.subscribe-message {
+  margin-top: 8px;
+  color: #a7f3be;
+  font-size: 14px;
 }
 
 .btn-edit {

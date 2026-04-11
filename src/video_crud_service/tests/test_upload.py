@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from src.video_crud_service.models import Video
 
 
@@ -8,20 +8,21 @@ def test_upload_video_success(client, test_db, sample_video_file, tmp_path):
     # Mock the upload directory and thumbnail generation
     with patch("src.video_crud_service.videos.UPLOAD_DIR", tmp_path):
         with patch("src.video_crud_service.videos._generate_first_frame_thumbnail", return_value=False):
-            response = client.post(
-                "/videos/upload",
-                data={
-                    "title": "My Test Video",
-                    "description": "A great video",
-                    "category": "Technology",
-                    "tags": "python, testing",
-                    "uploader_id": 1,
-                    "views": 5,
-                    "likes": 2,
-                    "duration_seconds": 120,
-                },
-                files={"file": ("test.mp4", sample_video_file, "video/mp4")},
-            )
+            with patch("src.video_crud_service.videos._notify_subscribers_new_video", new_callable=AsyncMock) as mock_notify:
+                response = client.post(
+                    "/videos/upload",
+                    data={
+                        "title": "My Test Video",
+                        "description": "A great video",
+                        "category": "Technology",
+                        "tags": "python, testing",
+                        "uploader_id": 1,
+                        "views": 5,
+                        "likes": 2,
+                        "duration_seconds": 120,
+                    },
+                    files={"file": ("test.mp4", sample_video_file, "video/mp4")},
+                )
     
     assert response.status_code == 200
     data = response.json()
@@ -39,6 +40,7 @@ def test_upload_video_success(client, test_db, sample_video_file, tmp_path):
     videos = test_db.query(Video).all()
     assert len(videos) == 1
     assert videos[0].title == "My Test Video"
+    mock_notify.assert_awaited_once()
 
 
 def test_upload_invalid_file_type(client):
@@ -98,4 +100,21 @@ def test_upload_octet_stream_with_video_extension(client, sample_video_file, tmp
                 files={"file": ("test.mp4", sample_video_file, "application/octet-stream")},
             )
     
+    assert response.status_code == 200
+
+
+def test_upload_notification_failure_does_not_fail_upload(client, sample_video_file, tmp_path):
+    with patch("src.video_crud_service.videos.UPLOAD_DIR", tmp_path):
+        with patch("src.video_crud_service.videos._generate_first_frame_thumbnail", return_value=False):
+            with patch(
+                "src.video_crud_service.videos._notify_subscribers_new_video",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("notification failed"),
+            ):
+                response = client.post(
+                    "/videos/upload",
+                    data={"title": "Notification Resilience", "uploader_id": 1},
+                    files={"file": ("test.mp4", sample_video_file, "video/mp4")},
+                )
+
     assert response.status_code == 200
