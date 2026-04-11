@@ -4,6 +4,7 @@ import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { fetchVideos } from '@/services/videos'
+import { fetchSubscriptionsFeed } from '@/services/dashboard'
 import type { VideoItem } from '@/types/video'
 
 const authStore = useAuthStore()
@@ -12,7 +13,10 @@ const editMode = ref(false)
 const message = ref('')
 const loadingVideos = ref(false)
 const videoError = ref('')
+const loadingSubscriptions = ref(false)
+const subscriptionsError = ref('')
 const allVideos = ref<VideoItem[]>([])
+const subscriptionVideos = ref<VideoItem[]>([])
 
 const form = reactive({
   username: '',
@@ -30,11 +34,6 @@ const userVideos = computed(() => {
   return allVideos.value.filter((video) => video.authorId === authStore.currentUser?.id)
 })
 
-const subscribedVideos = computed(() => {
-  if (!authStore.currentUser) return []
-  return allVideos.value.filter((video) => authStore.currentUser?.subscribedTo.includes(video.authorId))
-})
-
 async function loadVideos() {
   loadingVideos.value = true
   videoError.value = ''
@@ -45,6 +44,21 @@ async function loadVideos() {
     videoError.value = error instanceof Error ? error.message : 'Failed to load videos.'
   } finally {
     loadingVideos.value = false
+  }
+}
+
+async function loadSubscriptionsFeed() {
+  if (!authStore.currentUser) return
+
+  loadingSubscriptions.value = true
+  subscriptionsError.value = ''
+
+  try {
+    subscriptionVideos.value = await fetchSubscriptionsFeed(authStore.currentUser.id, 20)
+  } catch (error) {
+    subscriptionsError.value = error instanceof Error ? error.message : 'Failed to load subscriptions feed.'
+  } finally {
+    loadingSubscriptions.value = false
   }
 }
 
@@ -62,6 +76,7 @@ function saveProfile() {
 
 onMounted(() => {
   loadVideos()
+  loadSubscriptionsFeed()
 })
 </script>
 
@@ -132,10 +147,10 @@ onMounted(() => {
     </section>
 
     <section v-if="tab === 'subscriptions'" class="video-grid">
-      <p v-if="loadingVideos" class="muted">Loading videos...</p>
-      <p v-else-if="videoError" class="muted">{{ videoError }}</p>
-      <VideoCard v-for="video in subscribedVideos" :key="video.id" :video="video" />
-      <p v-if="!loadingVideos && !videoError && subscribedVideos.length === 0" class="muted">No subscriptions yet.</p>
+      <p v-if="loadingSubscriptions" class="muted">Loading subscriptions feed...</p>
+      <p v-else-if="subscriptionsError" class="muted">{{ subscriptionsError }}</p>
+      <VideoCard v-for="video in subscriptionVideos" :key="video.id" :video="video" />
+      <p v-if="!loadingSubscriptions && !subscriptionsError && subscriptionVideos.length === 0" class="muted">No videos from subscriptions yet.</p>
     </section>
 
     <p v-if="message" class="ok">{{ message }}</p>
