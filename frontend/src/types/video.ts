@@ -37,7 +37,12 @@ export interface VideoApiItem {
 
 const DEFAULT_THUMBNAIL =
   'https://images.unsplash.com/photo-1492619375914-88005aa9e8fb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080'
-const DEFAULT_HOST = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+const DEFAULT_HOST =
+  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? '127.0.0.1'
+    : typeof window !== 'undefined'
+      ? window.location.hostname
+      : 'localhost'
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || `http://${DEFAULT_HOST}:8000`
 ).replace(/\/$/, '')
