@@ -1,20 +1,26 @@
+import logging
+import os
 from pathlib import Path
 import subprocess
 from uuid import uuid4
 
+import httpx
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from src.dashboard_service.models import Subscription
 from .models import Video
 from .database import SessionLocal
 
 router = APIRouter(prefix="/videos", tags=["videos"])
+logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 THUMBNAIL_DIR = UPLOAD_DIR / "thumbnails"
 THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
+COMMUNICATION_API_BASE_URL = os.getenv("COMMUNICATION_API_BASE_URL", "").strip().rstrip("/")
 
 
 def _split_tags(tags: str) -> list[str]:
@@ -76,6 +82,46 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def _subscriber_user_ids_for_channel(db: Session, channel_user_id: int) -> list[str]:
+    rows = (
+        db.query(Subscription.subscriber_user_id)
+        .filter(Subscription.channel_user_id == str(channel_user_id))
+        .all()
+    )
+    # rows are SQLAlchemy row tuples in this query shape
+    return [row[0] for row in rows if row and row[0]]
+
+
+async def _notify_subscribers_new_video(db: Session, video: Video) -> None:
+    if not COMMUNICATION_API_BASE_URL:
+        return
+
+    recipient_user_ids = _subscriber_user_ids_for_channel(db, video.uploader_id)
+    if not recipient_user_ids:
+        return
+
+    payload = {
+        "type": "new_video",
+        "recipient_user_ids": recipient_user_ids,
+        "title": "New video uploaded",
+        "message": f"Uploader {video.uploader_id} posted: {video.title}",
+        "actor_user_id": str(video.uploader_id),
+        "channel_id": str(video.uploader_id),
+        "video_id": video.id,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.post(
+                f"{COMMUNICATION_API_BASE_URL}/comm/notifications",
+                json=payload,
+            )
+            response.raise_for_status()
+    except Exception:
+        # Notification is best-effort; upload should still succeed.
+        logger.exception("Failed to send new-video notifications for video_id=%s", video.id)
 
 
 @router.get("/ping")
@@ -142,6 +188,10 @@ async def upload_video(
     db.add(video)
     db.commit()
     db.refresh(video)
+    try:
+        await _notify_subscribers_new_video(db, video)
+    except Exception:
+        logger.exception("Unexpected notification error for video_id=%s", video.id)
 
     return serialize_video(video)
 

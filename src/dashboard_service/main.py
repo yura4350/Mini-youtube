@@ -2,6 +2,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from src.dashboard_service.models import SearchHistory, WatchHistory, Subscripti
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+COMMUNICATION_API_BASE_URL = os.getenv("COMMUNICATION_API_BASE_URL", "").strip().rstrip("/")
 
 app = FastAPI(title="Dashboard Service")
 
@@ -35,6 +37,48 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+async def _send_subscription_notifications(subscriber_user_id: str, channel_user_id: str) -> None:
+    if not COMMUNICATION_API_BASE_URL:
+        return
+
+    payloads = [
+        {
+            "type": "subscription",
+            "recipient_user_ids": [subscriber_user_id],
+            "title": "Subscription confirmed",
+            "message": f"You subscribed to channel {channel_user_id}.",
+            "actor_user_id": channel_user_id,
+            "channel_id": channel_user_id,
+            "video_id": None,
+        },
+        {
+            "type": "subscription",
+            "recipient_user_ids": [channel_user_id],
+            "title": "New subscriber",
+            "message": f"User {subscriber_user_id} subscribed to your channel.",
+            "actor_user_id": subscriber_user_id,
+            "channel_id": channel_user_id,
+            "video_id": None,
+        },
+    ]
+
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            for payload in payloads:
+                response = await client.post(
+                    f"{COMMUNICATION_API_BASE_URL}/comm/notifications",
+                    json=payload,
+                )
+                response.raise_for_status()
+    except Exception:
+        # Notification is best-effort. Core subscription flow should still succeed.
+        logger.exception(
+            "Failed to send subscription notifications subscriber=%s channel=%s",
+            subscriber_user_id,
+            channel_user_id,
+        )
 
 
 @app.on_event("startup")
@@ -123,6 +167,91 @@ def subscriptions_feed(
         .all()
     )
     return {"user_id": user_id, "videos": [serialize_video(v) for v in videos]}
+
+
+@app.get("/subscriptions")
+def list_subscriptions(
+    user_id: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    """List channel user IDs that the given user is subscribed to."""
+    rows = (
+        db.query(Subscription)
+        .filter(Subscription.subscriber_user_id == user_id)
+        .order_by(Subscription.created_at.desc())
+        .all()
+    )
+    return {
+        "user_id": user_id,
+        "channel_user_ids": [row.channel_user_id for row in rows],
+        "count": len(rows),
+    }
+
+
+@app.post("/subscriptions")
+async def subscribe(
+    subscriber_user_id: str = Query(..., min_length=1),
+    channel_user_id: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    """Create a subscription relationship (idempotent)."""
+    if subscriber_user_id == channel_user_id:
+        raise HTTPException(status_code=400, detail="You cannot subscribe to yourself")
+
+    existing = (
+        db.query(Subscription)
+        .filter(Subscription.subscriber_user_id == subscriber_user_id)
+        .filter(Subscription.channel_user_id == channel_user_id)
+        .first()
+    )
+    if existing:
+        return {
+            "subscriber_user_id": subscriber_user_id,
+            "channel_user_id": channel_user_id,
+            "subscribed": True,
+        }
+
+    db.add(
+        Subscription(
+            subscriber_user_id=subscriber_user_id,
+            channel_user_id=channel_user_id,
+            created_at=datetime.now(timezone.utc),
+        )
+    )
+    db.commit()
+    await _send_subscription_notifications(subscriber_user_id, channel_user_id)
+
+    return {
+        "subscriber_user_id": subscriber_user_id,
+        "channel_user_id": channel_user_id,
+        "subscribed": True,
+    }
+
+
+@app.delete("/subscriptions")
+def unsubscribe(
+    subscriber_user_id: str = Query(..., min_length=1),
+    channel_user_id: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    """Delete an existing subscription relationship."""
+    row = (
+        db.query(Subscription)
+        .filter(Subscription.subscriber_user_id == subscriber_user_id)
+        .filter(Subscription.channel_user_id == channel_user_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    db.delete(row)
+    db.commit()
+
+    return {
+        "subscriber_user_id": subscriber_user_id,
+        "channel_user_id": channel_user_id,
+        "subscribed": False,
+    }
 
 
 @app.post("/user/history/watched")

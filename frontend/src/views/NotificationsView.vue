@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AppIcon from '@/components/icons/AppIcon.vue'
@@ -36,7 +36,6 @@ async function loadNotifications() {
     errorMessage.value = error instanceof Error ? error.message : 'Failed to load notifications.'
   } finally {
     loading.value = false
-    notifyBadgeRefresh()
   }
 }
 
@@ -105,6 +104,11 @@ async function markAllAsRead() {
 
 onMounted(() => {
   loadNotifications()
+  window.addEventListener('notifications-updated', loadNotifications)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('notifications-updated', loadNotifications)
 })
 </script>
 

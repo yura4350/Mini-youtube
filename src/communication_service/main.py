@@ -30,6 +30,7 @@ MAX_CHAT_HISTORY_PER_ROOM = 100
 direct_chat_rooms: Dict[str, Set[WebSocket]] = {}
 direct_chat_history: Dict[str, List[dict]] = {}
 MAX_DIRECT_CHAT_HISTORY_PER_ROOM = 200
+notification_stream_clients: Dict[str, Set[WebSocket]] = {}
 
 
 class NotificationType(str, Enum):
@@ -103,6 +104,26 @@ async def broadcast_to_direct_room(room_key: str, payload: dict):
             direct_chat_rooms[room_key].discard(socket)
 
 
+async def broadcast_notification_to_users(user_ids: List[str], payload: dict):
+    stale_by_user: Dict[str, List[WebSocket]] = {}
+
+    for user_id in user_ids:
+        sockets = list(notification_stream_clients.get(user_id, set()))
+        for socket in sockets:
+            try:
+                await socket.send_json(payload)
+            except Exception:
+                stale_by_user.setdefault(user_id, []).append(socket)
+
+    for user_id, stale_sockets in stale_by_user.items():
+        if user_id not in notification_stream_clients:
+            continue
+        for socket in stale_sockets:
+            notification_stream_clients[user_id].discard(socket)
+        if not notification_stream_clients[user_id]:
+            notification_stream_clients.pop(user_id, None)
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -123,7 +144,7 @@ def health() -> dict:
 
 
 @app.post("/comm/notifications")
-def create_notification(payload: NotificationCreate, db: Session = Depends(get_db)) -> dict:
+async def create_notification(payload: NotificationCreate, db: Session = Depends(get_db)) -> dict:
     """Create and route notification alerts to recipient inboxes."""
     created_at = datetime.now(timezone.utc)
     routed_to: List[str] = []
@@ -150,6 +171,27 @@ def create_notification(payload: NotificationCreate, db: Session = Depends(get_d
     db.add_all(db_rows)
     db.commit()
 
+    for row in db_rows:
+        await broadcast_notification_to_users(
+            [row.recipient_user_id],
+            {
+                "type": "notification_created",
+                "notification": {
+                    "notification_id": row.notification_id,
+                    "type": row.type,
+                    "recipient_user_id": row.recipient_user_id,
+                    "title": row.title,
+                    "message": row.message,
+                    "actor_user_id": row.actor_user_id,
+                    "channel_id": row.channel_id,
+                    "video_id": row.video_id,
+                    "is_read": row.is_read,
+                    "read_at": row.read_at.isoformat() if row.read_at else None,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                },
+            },
+        )
+
     return {
         "status": "routed",
         "notification_type": payload.type,
@@ -158,6 +200,33 @@ def create_notification(payload: NotificationCreate, db: Session = Depends(get_d
         "notification_ids": created_ids,
         "created_at": created_at.isoformat(),
     }
+
+
+@app.websocket("/comm/notifications/stream")
+async def notifications_stream(websocket: WebSocket):
+    await websocket.accept()
+
+    user_id = (websocket.query_params.get("user_id") or "").strip()
+    if not user_id:
+        await websocket.send_json({"type": "error", "message": "user_id is required"})
+        await websocket.close(code=1008)
+        return
+
+    clients = notification_stream_clients.setdefault(user_id, set())
+    clients.add(websocket)
+    await websocket.send_json({"type": "connected", "user_id": user_id})
+
+    try:
+        while True:
+            # Keep websocket open; clients may optionally send ping frames/messages.
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if user_id in notification_stream_clients:
+            notification_stream_clients[user_id].discard(websocket)
+            if not notification_stream_clients[user_id]:
+                notification_stream_clients.pop(user_id, None)
 
 
 @app.get("/comm/notifications")

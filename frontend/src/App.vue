@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AppIcon from '@/components/icons/AppIcon.vue'
-import { fetchNotifications } from '@/services/notifications'
+import { connectNotificationStream, fetchNotifications } from '@/services/notifications'
 import { fetchSearchSuggestions } from '@/services/dashboard'
 import { authService } from '@/services/auth'
 import type { NotificationItem } from '@/types/notification'
@@ -21,6 +21,11 @@ const notificationOpen = ref(false)
 const notificationLoading = ref(false)
 const recentNotifications = ref<NotificationItem[]>([])
 const notificationCenterRef = ref<HTMLElement | null>(null)
+let disconnectNotificationStream: (() => void) | null = null
+let notificationStreamReconnectTimer: ReturnType<typeof setTimeout> | null = null
+const notificationStreamUserId = ref<string | null>(null)
+const notificationStreamShouldReconnect = ref(false)
+let notificationFallbackPollTimer: ReturnType<typeof setInterval> | null = null
 
 const showSearch = computed(() => route.name !== 'login' && route.name !== 'register')
 
@@ -108,6 +113,65 @@ function handleNotificationsUpdated() {
   refreshUnreadNotifications()
 }
 
+function stopNotificationStream() {
+  if (disconnectNotificationStream) {
+    disconnectNotificationStream()
+    disconnectNotificationStream = null
+  }
+  if (notificationStreamReconnectTimer) {
+    clearTimeout(notificationStreamReconnectTimer)
+    notificationStreamReconnectTimer = null
+  }
+  notificationStreamShouldReconnect.value = false
+  notificationStreamUserId.value = null
+  if (notificationFallbackPollTimer) {
+    clearInterval(notificationFallbackPollTimer)
+    notificationFallbackPollTimer = null
+  }
+}
+
+function startNotificationStream(userId: string) {
+  stopNotificationStream()
+  notificationStreamUserId.value = userId
+  notificationStreamShouldReconnect.value = true
+
+  const connect = () => {
+    if (!notificationStreamShouldReconnect.value || notificationStreamUserId.value !== userId) return
+
+    disconnectNotificationStream = connectNotificationStream({
+      userId,
+      onNotification: () => {
+        refreshUnreadNotifications()
+        if (notificationOpen.value) {
+          openNotificationCenter()
+        }
+        window.dispatchEvent(new CustomEvent('notifications-updated'))
+      },
+      onStatusChange: (status) => {
+        if (status === 'error' || status === 'disconnected') {
+          if (!notificationStreamShouldReconnect.value || notificationStreamUserId.value !== userId) return
+          if (notificationStreamReconnectTimer) clearTimeout(notificationStreamReconnectTimer)
+          notificationStreamReconnectTimer = setTimeout(connect, 1500)
+        }
+      },
+    })
+  }
+
+  connect()
+
+  // Fallback: keep unread badge in sync even if WS is blocked/intermittent.
+  if (notificationFallbackPollTimer) {
+    clearInterval(notificationFallbackPollTimer)
+  }
+  notificationFallbackPollTimer = setInterval(() => {
+    if (authStore.currentUser?.id !== userId) return
+    refreshUnreadNotifications()
+    if (notificationOpen.value) {
+      openNotificationCenter()
+    }
+  }, 7000)
+}
+
 onMounted(() => {
   authStore.hydrate()
   refreshUnreadNotifications()
@@ -118,16 +182,24 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('notifications-updated', handleNotificationsUpdated)
   window.removeEventListener('click', closeNotificationCenterByOutsideClick)
+  stopNotificationStream()
 })
 
 watch(
   () => authStore.currentUser?.id,
-  () => {
+  (userId) => {
     refreshUnreadNotifications()
+    if (!userId) {
+      stopNotificationStream()
+      return
+    }
+    startNotificationStream(userId)
   },
+  { immediate: true },
 )
 
 function logout() {
+  stopNotificationStream()
   authStore.logout()
   router.push('/login')
 }
