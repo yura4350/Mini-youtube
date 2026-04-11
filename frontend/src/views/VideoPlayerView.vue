@@ -328,14 +328,14 @@ async function toggleSubscription() {
   try {
     if (isSubscribed.value) {
       await unsubscribeFromChannel(subscriberId, channelId)
-      subscribeMessage.value = 'Unsubscribed.'
+      subscribeMessage.value = ''
       subscribedChannelIds.value = subscribedChannelIds.value.filter((id) => id !== channelId)
       if (authStore.currentUser) {
         authStore.currentUser.subscribedTo = authStore.currentUser.subscribedTo.filter((id) => id !== channelId)
       }
     } else {
       await subscribeToChannel(subscriberId, channelId)
-      subscribeMessage.value = 'Subscribed.'
+      subscribeMessage.value = ''
       if (!subscribedChannelIds.value.includes(channelId)) {
         subscribedChannelIds.value = [...subscribedChannelIds.value, channelId]
       }
@@ -410,7 +410,7 @@ watch(
           <AppIcon name="empty" :size="14" /> {{ isDeleting ? 'Deleting...' : 'Delete' }}
         </button>
       </div>
-      <p v-if="subscribeMessage" class="subscribe-message">{{ subscribeMessage }}</p>
+      <p v-if="subscribeMessage" class="subscribe-error">{{ subscribeMessage }}</p>
 
       <div v-if="isEditing" class="edit-form">
         <h2>Edit Video</h2>
@@ -589,9 +589,9 @@ h1 {
   cursor: not-allowed;
 }
 
-.subscribe-message {
+.subscribe-error {
   margin-top: 8px;
-  color: #a7f3be;
+  color: #ff9f8b;
   font-size: 14px;
 }
 

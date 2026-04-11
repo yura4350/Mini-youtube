@@ -1,5 +1,6 @@
 import {
   mapNotificationApiItemToNotificationItem,
+  type NotificationApiItem,
   type NotificationItem,
   type NotificationListResponse,
 } from '@/types/notification'
@@ -57,5 +58,65 @@ export async function markNotificationsRead(options: {
 
   if (!response.ok) {
     throw new Error(await parseError(response))
+  }
+}
+
+type StreamEnvelope =
+  | { type: 'connected'; user_id: string }
+  | { type: 'error'; message: string }
+  | { type: 'notification_created'; notification: NotificationApiItem }
+
+export function connectNotificationStream(options: {
+  userId: string
+  onNotification: (item: NotificationItem) => void
+  onStatusChange?: (status: 'connected' | 'disconnected' | 'error') => void
+}): () => void {
+  const explicitWsBase = (import.meta.env.VITE_COMM_WS_BASE_URL || '').trim()
+  const wsBase = explicitWsBase
+    ? explicitWsBase.replace(/\/$/, '')
+    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://localhost:8002`
+
+  const query = new URLSearchParams({ user_id: options.userId })
+  const socket = new WebSocket(`${wsBase}/comm/notifications/stream?${query.toString()}`)
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+
+  socket.onopen = () => {
+    heartbeatTimer = setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send('ping')
+      }
+    }, 20000)
+    options.onStatusChange?.('connected')
+  }
+
+  socket.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data) as StreamEnvelope
+      if (payload.type === 'notification_created') {
+        options.onNotification(mapNotificationApiItemToNotificationItem(payload.notification))
+      }
+    } catch {
+      // Ignore malformed payloads.
+    }
+  }
+
+  socket.onerror = () => {
+    options.onStatusChange?.('error')
+  }
+
+  socket.onclose = () => {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer)
+      heartbeatTimer = null
+    }
+    options.onStatusChange?.('disconnected')
+  }
+
+  return () => {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer)
+      heartbeatTimer = null
+    }
+    socket.close()
   }
 }

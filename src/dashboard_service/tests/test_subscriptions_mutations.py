@@ -1,4 +1,5 @@
 from .conftest import create_test_subscription
+from unittest.mock import AsyncMock, patch
 
 
 def test_list_subscriptions_empty(client):
@@ -11,9 +12,11 @@ def test_list_subscriptions_empty(client):
 
 
 def test_subscribe_and_list(client):
-    response = client.post("/subscriptions?subscriber_user_id=user1&channel_user_id=channel1")
-    assert response.status_code == 200
-    assert response.json()["subscribed"] is True
+    with patch("src.dashboard_service.main._send_subscription_notifications", new_callable=AsyncMock) as mock_notify:
+        response = client.post("/subscriptions?subscriber_user_id=user1&channel_user_id=channel1")
+        assert response.status_code == 200
+        assert response.json()["subscribed"] is True
+        mock_notify.assert_awaited_once_with("user1", "channel1")
 
     list_response = client.get("/subscriptions?user_id=user1")
     assert list_response.status_code == 200
@@ -21,11 +24,14 @@ def test_subscribe_and_list(client):
 
 
 def test_subscribe_is_idempotent(client):
-    first = client.post("/subscriptions?subscriber_user_id=user1&channel_user_id=channel1")
-    second = client.post("/subscriptions?subscriber_user_id=user1&channel_user_id=channel1")
+    with patch("src.dashboard_service.main._send_subscription_notifications", new_callable=AsyncMock) as mock_notify:
+        first = client.post("/subscriptions?subscriber_user_id=user1&channel_user_id=channel1")
+        second = client.post("/subscriptions?subscriber_user_id=user1&channel_user_id=channel1")
 
-    assert first.status_code == 200
-    assert second.status_code == 200
+        assert first.status_code == 200
+        assert second.status_code == 200
+        # Only first subscribe should emit notifications.
+        mock_notify.assert_awaited_once_with("user1", "channel1")
 
     list_response = client.get("/subscriptions?user_id=user1")
     assert list_response.status_code == 200
