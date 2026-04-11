@@ -35,6 +35,11 @@ export interface VideoApiItem {
   created_at?: string
 }
 
+export interface SearchHistoryItem {
+  query: string
+  searched_at: string
+}
+
 const DEFAULT_THUMBNAIL =
   'https://images.unsplash.com/photo-1492619375914-88005aa9e8fb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080'
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
