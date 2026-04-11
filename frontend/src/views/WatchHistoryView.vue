@@ -113,11 +113,11 @@ onMounted(() => {
             <div class="position-bar">
               <div
                 class="position-fill"
-                :style="{ width: `${((video.lastPositionSeconds || 0) / Math.max(video.duration || 1, 1)) * 100}%` }"
+                :style="{ width: `${((Number(video.lastPositionSeconds) || 0) / Math.max(Number(video.duration) || 1, 1)) * 100}%` }"
               />
             </div>
             <div class="position-label">
-              {{ formatDuration(video.lastPositionSeconds || 0) }} / {{ formatDuration(Math.max(video.duration || 0, 0)) }}
+              {{ formatDuration(Number(video.lastPositionSeconds) || 0) }} / {{ formatDuration(Math.max(Number(video.duration) || 0, 0)) }}
             </div>
           </div>
 
