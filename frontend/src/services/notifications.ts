@@ -4,7 +4,10 @@ import {
   type NotificationListResponse,
 } from '@/types/notification'
 
-const COMM_API_BASE_URL = (import.meta.env.VITE_COMM_API_BASE_URL || 'http://localhost:8002').replace(/\/$/, '')
+const DEFAULT_HOST = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+const COMM_API_BASE_URL = (
+  import.meta.env.VITE_COMM_API_BASE_URL || `http://${DEFAULT_HOST}:8002`
+).replace(/\/$/, '')
 
 async function parseError(response: Response): Promise<string> {
   try {

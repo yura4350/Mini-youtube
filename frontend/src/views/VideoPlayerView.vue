@@ -60,7 +60,8 @@ const editForm = reactive({
 const playbackUrl = computed(() => {
   if (!currentVideo.value) return ''
 
-  const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
+  const defaultHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+  const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || `http://${defaultHost}:8000`).replace(/\/$/, '')
   const url = currentVideo.value.videoUrl
 
   if (url.startsWith('http://') || url.startsWith('https://')) {
@@ -115,9 +116,10 @@ function connectChat() {
   }
 
   const explicitWsBase = (import.meta.env.VITE_COMM_WS_BASE_URL || '').trim()
+  const defaultHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
   const wsBase = explicitWsBase
     ? explicitWsBase.replace(/\/$/, '')
-    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://localhost:8002`
+    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${defaultHost}:8002`
 
   const params = new URLSearchParams({
     video_id: currentVideo.value.id,
