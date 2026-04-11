@@ -6,6 +6,7 @@ import AppIcon from '@/components/icons/AppIcon.vue'
 import { formatViews } from '@/services/video-format'
 import { fetchVideoById, fetchVideos, updateVideo, deleteVideo } from '@/services/videos'
 import { toApiUploaderId } from '@/services/user-id'
+import { recordWatchEvent } from '@/services/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import type { VideoItem } from '@/types/video'
 
@@ -26,7 +27,9 @@ const chatInput = ref('')
 const chatConnected = ref(false)
 const chatStatus = ref('Connecting...')
 const chatContainer = ref<HTMLElement | null>(null)
+const videoElement = ref<HTMLVideoElement | null>(null)
 let chatSocket: WebSocket | null = null
+let watchEventInterval: ReturnType<typeof setInterval> | null = null
 
 interface ChatMessage {
   type: 'chat_message' | 'system'
@@ -102,6 +105,31 @@ function closeChatSocket() {
     chatSocket.close()
     chatSocket = null
   }
+}
+
+function stopRecordingWatchEvents() {
+  if (watchEventInterval) {
+    clearInterval(watchEventInterval)
+    watchEventInterval = null
+  }
+}
+
+function startRecordingWatchEvents() {
+  stopRecordingWatchEvents()
+
+  if (!authStore.currentUser || !currentVideo.value) return
+
+  recordWatchEvent(authStore.currentUser.id, currentVideo.value.id, 0).catch(() => {
+    // Silently fail - don't show error to user
+  })
+
+  watchEventInterval = setInterval(() => {
+    if (!videoElement.value || !authStore.currentUser || !currentVideo.value) return
+    const currentPosition = Math.floor(videoElement.value.currentTime)
+    recordWatchEvent(authStore.currentUser.id, currentVideo.value.id, currentPosition).catch(() => {
+      // Silently fail - don't show error to user
+    })
+  }, 10000)
 }
 
 function connectChat() {
@@ -196,6 +224,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   closeChatSocket()
+  stopRecordingWatchEvents()
 })
 
 const isOwner = computed(() => {
@@ -263,6 +292,7 @@ async function onDelete() {
 watch(
   () => route.params.id,
   () => {
+    stopRecordingWatchEvents()
     loadCurrentVideo()
   },
 )
@@ -271,6 +301,17 @@ watch(
   () => [currentVideo.value?.id, authStore.currentUser?.id],
   () => {
     connectChat()
+  },
+)
+
+watch(
+  () => videoElement.value?.paused,
+  (isPaused) => {
+    if (isPaused) {
+      stopRecordingWatchEvents()
+    } else {
+      startRecordingWatchEvents()
+    }
   },
 )
 </script>
@@ -285,7 +326,7 @@ watch(
   <main v-if="currentVideo" class="watch-page">
     <section class="main-col">
       <div class="player-wrap">
-        <video :src="playbackUrl" :poster="currentVideo.thumbnail" controls preload="metadata" />
+        <video ref="videoElement" :src="playbackUrl" :poster="currentVideo.thumbnail" controls preload="metadata" @play="startRecordingWatchEvents" @pause="stopRecordingWatchEvents" />
       </div>
 
       <h1>{{ currentVideo.title }}</h1>
