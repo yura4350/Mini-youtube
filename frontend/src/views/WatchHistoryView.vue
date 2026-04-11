@@ -72,19 +72,19 @@ onMounted(() => {
     <section class="history-shell">
       <header class="history-header">
         <div>
-          <h1><AppIcon name="history" :size="18" /> Watch History</h1>
+          <h1><AppIcon name="clock" :size="18" /> Watch History</h1>
           <p>Videos you've watched recently.</p>
         </div>
 
         <div class="header-actions">
           <button class="ghost" @click="loadWatchHistory">
-            <AppIcon name="refresh" :size="14" /> Refresh
+            <AppIcon name="upload" :size="14" /> Refresh
           </button>
         </div>
       </header>
 
       <section v-if="loading" class="status-box">
-        <AppIcon name="loading" :size="16" />
+        <AppIcon name="play" :size="16" />
         Loading watch history...
       </section>
 
@@ -113,17 +113,17 @@ onMounted(() => {
             <div class="position-bar">
               <div
                 class="position-fill"
-                :style="{ width: `${(video.lastPositionSeconds / (video.duration || 1)) * 100}%` }"
+                :style="{ width: `${((video.lastPositionSeconds || 0) / Math.max(video.duration || 1, 1)) * 100}%` }"
               />
             </div>
             <div class="position-label">
-              {{ formatDuration(video.lastPositionSeconds) }} / {{ formatDuration(video.duration || 0) }}
+              {{ formatDuration(video.lastPositionSeconds || 0) }} / {{ formatDuration(Math.max(video.duration || 0, 0)) }}
             </div>
           </div>
 
           <div class="card-content">
             <h3 class="video-title">{{ video.title }}</h3>
-            <p class="channel-name">{{ video.uploaderName }}</p>
+            <p class="channel-name">{{ video.authorName }}</p>
             <p class="last-watched">
               <AppIcon name="clock" :size="12" />
               Watched {{ formatDate(video.lastWatchedAt) }}
