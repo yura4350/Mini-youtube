@@ -1,6 +1,6 @@
 import os
 import time
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker, declarative_base
 
@@ -12,6 +12,35 @@ engine = create_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+
+def _ensure_video_schema() -> None:
+    inspector = inspect(engine)
+    if "videos" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("videos")}
+    required_columns = {
+        "description": "VARCHAR NOT NULL DEFAULT ''",
+        "category": "VARCHAR NOT NULL DEFAULT 'Education'",
+        "tags": "VARCHAR NOT NULL DEFAULT ''",
+        "thumbnail_url": "VARCHAR NOT NULL DEFAULT ''",
+        "views": "INTEGER NOT NULL DEFAULT 0",
+        "likes": "INTEGER NOT NULL DEFAULT 0",
+        "duration_seconds": "INTEGER NOT NULL DEFAULT 0",
+    }
+
+    statements = []
+    for column_name, column_definition in required_columns.items():
+        if column_name not in existing_columns:
+            statements.append(text(f"ALTER TABLE videos ADD COLUMN {column_name} {column_definition}"))
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(statement)
 
 def get_db():
     db = SessionLocal()
@@ -25,6 +54,7 @@ def init_db(max_retries: int = 30, retry_delay_seconds: int = 2):
     for attempt in range(1, max_retries + 1):
         try:
             Base.metadata.create_all(bind=engine)
+            _ensure_video_schema()
             return
         except OperationalError as exc:
             last_error = exc
