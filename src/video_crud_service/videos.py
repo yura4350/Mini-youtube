@@ -21,6 +21,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 THUMBNAIL_DIR = UPLOAD_DIR / "thumbnails"
 THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
 COMMUNICATION_API_BASE_URL = os.getenv("COMMUNICATION_API_BASE_URL", "").strip().rstrip("/")
+MAX_NOTIFICATION_MESSAGE_LENGTH = 180
 
 
 def _split_tags(tags: str) -> list[str]:
@@ -29,6 +30,12 @@ def _split_tags(tags: str) -> list[str]:
 
 def _thumbnail_path(video_id: str) -> Path:
     return THUMBNAIL_DIR / f"{video_id}.jpg"
+
+
+def _truncate_text(value: str, max_length: int) -> str:
+    if len(value) <= max_length:
+        return value
+    return f"{value[:max_length - 3].rstrip()}..."
 
 
 def _generate_first_frame_thumbnail(video_path: Path, thumbnail_path: Path) -> bool:
@@ -106,7 +113,10 @@ async def _notify_subscribers_new_video(db: Session, video: Video) -> None:
         "type": "new_video",
         "recipient_user_ids": recipient_user_ids,
         "title": "New video uploaded",
-        "message": f"Uploader {video.uploader_id} posted: {video.title}",
+        "message": _truncate_text(
+            f"Uploader {video.uploader_id} posted: {video.title}",
+            MAX_NOTIFICATION_MESSAGE_LENGTH,
+        ),
         "actor_user_id": str(video.uploader_id),
         "channel_id": str(video.uploader_id),
         "video_id": video.id,

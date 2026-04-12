@@ -41,6 +41,7 @@ async function loadNotifications() {
 
 function formatType(type: NotificationItem['type']): string {
   if (type === 'new_video') return 'New video'
+  if (type === 'direct_message') return 'Direct message'
   return 'Subscription'
 }
 

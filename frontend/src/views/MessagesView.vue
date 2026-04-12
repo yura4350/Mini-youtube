@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { authService } from '@/services/auth'
+import { fetchSubscribedChannelIds } from '@/services/dashboard'
 import type { User } from '@/types/auth'
 
 interface DirectMessage {
@@ -38,6 +39,7 @@ const selectedPeerId = ref('')
 const messages = ref<DirectMessage[]>([])
 const inputMessage = ref('')
 const status = ref('Disconnected')
+const chatHint = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
 let socket: WebSocket | null = null
 
@@ -87,6 +89,7 @@ function connectSocket() {
   })
 
   status.value = 'Connecting...'
+  chatHint.value = ''
   messages.value = []
   socket = new WebSocket(`${wsBase}/comm/direct-chat?${query.toString()}`)
 
@@ -109,11 +112,16 @@ function connectSocket() {
       }
 
       if (payload.type === 'error') {
-        status.value = payload.message
+        if (payload.message.includes('only send one message')) {
+          chatHint.value = 'You can send only one message unless both users follow each other.'
+        } else {
+          status.value = payload.message
+        }
         return
       }
 
       if (isDirectMessagePayload(payload)) {
+        chatHint.value = ''
         messages.value.push(payload)
         await nextTick()
         scrollBottom()
@@ -137,6 +145,7 @@ function sendMessage() {
   const message = inputMessage.value.trim()
   if (!message) return
 
+  chatHint.value = ''
   socket.send(JSON.stringify({ message }))
   inputMessage.value = ''
 }
@@ -146,12 +155,30 @@ function pickPeer(peerId: string) {
   router.replace({ name: 'messages', query: { peer: peerId } })
 }
 
-onMounted(() => {
-  authStore.hydrate()
-  users.value = authService.getAllUsers()
+async function refreshDirectoryAndSubscriptions() {
+  const currentUser = authStore.currentUser
+  if (!currentUser) {
+    users.value = []
+    return
+  }
+
+  users.value = await authService.getAllUsers()
+  try {
+    const subscribedIds = await fetchSubscribedChannelIds(currentUser.id)
+    if (authStore.currentUser?.id === currentUser.id) {
+      authStore.currentUser.subscribedTo = subscribedIds
+    }
+  } catch {
+    // Keep existing values when fetch fails.
+  }
+}
+
+onMounted(async () => {
+  await authStore.hydrate()
+  await refreshDirectoryAndSubscriptions()
 
   const peerFromQuery = typeof route.query.peer === 'string' ? route.query.peer : ''
-  if (peerFromQuery) {
+  if (peerFromQuery && peers.value.some((peer) => peer.id === peerFromQuery)) {
     selectedPeerId.value = peerFromQuery
   } else if (peers.value[0]) {
     selectedPeerId.value = peers.value[0].id
@@ -168,6 +195,13 @@ watch(
   () => selectedPeerId.value,
   () => {
     connectSocket()
+  },
+)
+
+watch(
+  () => authStore.currentUser?.id,
+  async () => {
+    await refreshDirectoryAndSubscriptions()
   },
 )
 </script>
@@ -203,6 +237,7 @@ watch(
           </h1>
           <span class="status">{{ status }}</span>
         </header>
+        <p v-if="chatHint" class="chat-hint">{{ chatHint }}</p>
 
         <div ref="messagesContainer" class="chat-messages">
           <article
@@ -329,6 +364,16 @@ watch(
   color: #cfd5df;
   font-size: 12px;
   padding: 2px 8px;
+}
+
+.chat-hint {
+  margin: 10px 12px 0;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
 }
 
 .chat-messages {

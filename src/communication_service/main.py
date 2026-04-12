@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.video_crud_service.database import SessionLocal, init_db
+from src.dashboard_service.models import Subscription
 from .models import Notification
 
 app = FastAPI(title="Communication Service")
@@ -31,11 +32,13 @@ direct_chat_rooms: Dict[str, Set[WebSocket]] = {}
 direct_chat_history: Dict[str, List[dict]] = {}
 MAX_DIRECT_CHAT_HISTORY_PER_ROOM = 200
 notification_stream_clients: Dict[str, Set[WebSocket]] = {}
+direct_room_active_users: Dict[str, Dict[str, int]] = {}
 
 
 class NotificationType(str, Enum):
     NEW_VIDEO = "new_video"
     SUBSCRIPTION = "subscription"
+    DIRECT_MESSAGE = "direct_message"
 
 
 class NotificationCreate(BaseModel):
@@ -124,28 +127,7 @@ async def broadcast_notification_to_users(user_ids: List[str], payload: dict):
             notification_stream_clients.pop(user_id, None)
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    # Ensure notification table exists before serving requests.
-    init_db()
-
-
-@app.get("/health")
-def health() -> dict:
-    return {"status": "ok", "service": "communication"}
-
-
-@app.post("/comm/notifications")
-async def create_notification(payload: NotificationCreate, db: Session = Depends(get_db)) -> dict:
-    """Create and route notification alerts to recipient inboxes."""
+async def _create_notifications(payload: NotificationCreate, db: Session) -> dict:
     created_at = datetime.now(timezone.utc)
     routed_to: List[str] = []
     created_ids: List[str] = []
@@ -200,6 +182,76 @@ async def create_notification(payload: NotificationCreate, db: Session = Depends
         "notification_ids": created_ids,
         "created_at": created_at.isoformat(),
     }
+
+
+def _has_subscription(db: Session, subscriber_user_id: str, channel_user_id: str) -> bool:
+    row = (
+        db.query(Subscription)
+        .filter(Subscription.subscriber_user_id == subscriber_user_id)
+        .filter(Subscription.channel_user_id == channel_user_id)
+        .first()
+    )
+    return row is not None
+
+
+def _is_mutual_subscription(db: Session, user_a: str, user_b: str) -> bool:
+    return _has_subscription(db, user_a, user_b) and _has_subscription(db, user_b, user_a)
+
+
+def _sender_already_sent_in_direct_room(room_key: str, sender_user_id: str) -> bool:
+    history = direct_chat_history.get(room_key, [])
+    return any(
+        item.get("type") == "direct_message" and item.get("sender_user_id") == sender_user_id
+        for item in history
+    )
+
+
+def _mark_direct_user_online(room_key: str, user_id: str) -> None:
+    room_presence = direct_room_active_users.setdefault(room_key, {})
+    room_presence[user_id] = room_presence.get(user_id, 0) + 1
+
+
+def _mark_direct_user_offline(room_key: str, user_id: str) -> None:
+    room_presence = direct_room_active_users.get(room_key)
+    if not room_presence:
+        return
+    next_count = room_presence.get(user_id, 0) - 1
+    if next_count > 0:
+        room_presence[user_id] = next_count
+    else:
+        room_presence.pop(user_id, None)
+    if not room_presence:
+        direct_room_active_users.pop(room_key, None)
+
+
+def _is_direct_user_online(room_key: str, user_id: str) -> bool:
+    room_presence = direct_room_active_users.get(room_key, {})
+    return room_presence.get(user_id, 0) > 0
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    # Ensure notification table exists before serving requests.
+    init_db()
+
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok", "service": "communication"}
+
+
+@app.post("/comm/notifications")
+async def create_notification(payload: NotificationCreate, db: Session = Depends(get_db)) -> dict:
+    """Create and route notification alerts to recipient inboxes."""
+    return await _create_notifications(payload, db)
 
 
 @app.websocket("/comm/notifications/stream")
@@ -392,7 +444,7 @@ async def real_time_chat(websocket: WebSocket):
 
 
 @app.websocket("/comm/direct-chat")
-async def direct_chat(websocket: WebSocket):
+async def direct_chat(websocket: WebSocket, db: Session = Depends(get_db)):
     await websocket.accept()
 
     user_id = (websocket.query_params.get("user_id") or "").strip()
@@ -422,6 +474,7 @@ async def direct_chat(websocket: WebSocket):
     room_key = _direct_room_key(user_id, peer_id)
     room = direct_chat_rooms.setdefault(room_key, set())
     room.add(websocket)
+    _mark_direct_user_online(room_key, user_id)
 
     history = direct_chat_history.get(room_key, [])
     await websocket.send_json(
@@ -439,6 +492,16 @@ async def direct_chat(websocket: WebSocket):
             if not message:
                 continue
 
+            if not _is_mutual_subscription(db, user_id, peer_id):
+                if _sender_already_sent_in_direct_room(room_key, user_id):
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "You can only send one message unless both users follow each other.",
+                        }
+                    )
+                    continue
+
             event = {
                 "type": "direct_message",
                 "room_key": room_key,
@@ -455,9 +518,27 @@ async def direct_chat(websocket: WebSocket):
                 direct_chat_history[room_key] = room_history[-MAX_DIRECT_CHAT_HISTORY_PER_ROOM:]
 
             await broadcast_to_direct_room(room_key, event)
+
+            if not _is_direct_user_online(room_key, peer_id):
+                preview = message[:120]
+                if len(message) > 120:
+                    preview = f"{preview.rstrip()}..."
+                await _create_notifications(
+                    NotificationCreate(
+                        type=NotificationType.DIRECT_MESSAGE,
+                        recipient_user_ids=[peer_id],
+                        title=f"New message from {username}",
+                        message=preview,
+                        actor_user_id=user_id,
+                        channel_id=None,
+                        video_id=None,
+                    ),
+                    db,
+                )
     except WebSocketDisconnect:
         pass
     finally:
+        _mark_direct_user_offline(room_key, user_id)
         if room_key in direct_chat_rooms:
             direct_chat_rooms[room_key].discard(websocket)
             if not direct_chat_rooms[room_key]:
