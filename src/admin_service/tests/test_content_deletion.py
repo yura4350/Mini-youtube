@@ -4,15 +4,16 @@ from pathlib import Path
 from src.admin_service.tests.conftest import seed_video, seed_user
 
 
-def test_delete_content_removes_video_from_db(client):
+def test_delete_content_removes_video_from_db(client, db):
     """Test DELETE /admin/content/{video_id} removes video from database."""
     # Create a temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
         tmp_path = tmp.name
 
     try:
-        user = seed_user(name="Ian", email="ian@test.com", role="user", is_active=True)
+        user = seed_user(db, name="Ian", email="ian@test.com", role="user", is_active=True)
         video = seed_video(
+            db,
             id="vid-001",
             title="Test Video",
             description="A test video",
@@ -37,7 +38,7 @@ def test_delete_content_removes_video_from_db(client):
             Path(tmp_path).unlink()
 
 
-def test_delete_nonexistent_video_returns_404(client):
+def test_delete_nonexistent_video_returns_404(client, db):
     """Test DELETE /admin/content/{video_id} returns 404 for non-existent video."""
     resp = client.delete("/admin/content/nonexistent-id")
     assert resp.status_code == 404
@@ -45,11 +46,12 @@ def test_delete_nonexistent_video_returns_404(client):
     assert body["detail"] == "Video not found"
 
 
-def test_delete_content_with_missing_file(client):
+def test_delete_content_with_missing_file(client, db):
     """Test DELETE /admin/content/{video_id} handles missing file gracefully."""
-    user = seed_user(name="Jack", email="jack@test.com", role="user", is_active=True)
+    user = seed_user(db, name="Jack", email="jack@test.com", role="user", is_active=True)
     # Point to a file that doesn't exist
     video = seed_video(
+        db,
         id="vid-002",
         title="Video with Missing File",
         description="File doesn't exist",
@@ -65,7 +67,7 @@ def test_delete_content_with_missing_file(client):
     assert body["deleted"] is True
 
 
-def test_delete_video_with_actual_file(client):
+def test_delete_video_with_actual_file(client, db):
     """Test DELETE /admin/content/{video_id} removes both DB record and file."""
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
         tmp_path = tmp.name
@@ -74,8 +76,9 @@ def test_delete_video_with_actual_file(client):
     try:
         assert Path(tmp_path).exists()
 
-        user = seed_user(name="Kate", email="kate@test.com", role="user", is_active=True)
+        user = seed_user(db, name="Kate", email="kate@test.com", role="user", is_active=True)
         video = seed_video(
+            db,
             id="vid-003",
             title="Video with Real File",
             description="Has actual file",
@@ -95,11 +98,12 @@ def test_delete_video_with_actual_file(client):
             Path(tmp_path).unlink()
 
 
-def test_delete_multiple_videos_independently(client):
+def test_delete_multiple_videos_independently(client, db):
     """Test deleting multiple videos doesn't affect each other."""
-    user = seed_user(name="Leo", email="leo@test.com", role="user", is_active=True)
+    user = seed_user(db, name="Leo", email="leo@test.com", role="user", is_active=True)
 
     video1 = seed_video(
+        db,
         id="vid-del-1",
         title="Video 1",
         description="First",
@@ -107,6 +111,7 @@ def test_delete_multiple_videos_independently(client):
         path="/tmp/vid1.mp4",
     )
     video2 = seed_video(
+        db,
         id="vid-del-2",
         title="Video 2",
         description="Second",
