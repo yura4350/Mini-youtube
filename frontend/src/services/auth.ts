@@ -169,9 +169,24 @@ async function hydrateCurrentUser(): Promise<User | null> {
 }
 
 // Keep compatibility with existing UI code that calls getAllUsers()
-function getAllUsers(): User[] {
-  const current = getCurrentUser()
-  return current ? [current] : []
+async function getAllUsers(): Promise<User[]> {
+  const token = getToken()
+  if (!token) return []
+
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/users/`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) return []
+
+    const backendUsers = (await response.json()) as BackendUser[]
+    return backendUsers.map(mapBackendUser)
+  } catch {
+    return []
+  }
 }
 
 // Keep local profile update for now (backend endpoint currently expects full UserCreate)

@@ -4,7 +4,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { connectNotificationStream, fetchNotifications } from '@/services/notifications'
-import { fetchSearchSuggestions } from '@/services/dashboard'
+import { fetchSearchSuggestions, fetchSubscribedChannelIds } from '@/services/dashboard'
 import { authService } from '@/services/auth'
 import type { NotificationItem } from '@/types/notification'
 import type { User } from '@/types/auth'
@@ -26,8 +26,42 @@ let notificationStreamReconnectTimer: ReturnType<typeof setTimeout> | null = nul
 const notificationStreamUserId = ref<string | null>(null)
 const notificationStreamShouldReconnect = ref(false)
 let notificationFallbackPollTimer: ReturnType<typeof setInterval> | null = null
+const allUsers = ref<User[]>([])
+
+const QUICK_NOTIFICATION_TITLE_MAX_LENGTH = 72
 
 const showSearch = computed(() => route.name !== 'login' && route.name !== 'register')
+
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value
+  return `${value.slice(0, maxLength - 3).trimEnd()}...`
+}
+
+function quickNotificationTitle(value: string): string {
+  return truncateText(value, QUICK_NOTIFICATION_TITLE_MAX_LENGTH)
+}
+
+async function refreshUserDirectory() {
+  if (!authStore.currentUser) {
+    allUsers.value = []
+    return
+  }
+  allUsers.value = await authService.getAllUsers()
+}
+
+async function refreshSubscribedChannels() {
+  const currentUser = authStore.currentUser
+  if (!currentUser) return
+
+  try {
+    const channelIds = await fetchSubscribedChannelIds(currentUser.id)
+    if (authStore.currentUser?.id === currentUser.id) {
+      authStore.currentUser.subscribedTo = channelIds
+    }
+  } catch {
+    // Keep existing values if sync fails.
+  }
+}
 
 async function refreshUnreadNotifications() {
   if (!authStore.currentUser) {
@@ -53,7 +87,7 @@ const quickPeers = computed<User[]>(() => {
   const currentUser = authStore.currentUser
   if (!currentUser) return []
 
-  const users = authService.getAllUsers().filter((user) => user.id !== currentUser.id)
+  const users = allUsers.value.filter((user) => user.id !== currentUser.id)
   const subscribed = new Set(currentUser.subscribedTo)
   const preferred = users.filter((user) => subscribed.has(user.id))
   const source = preferred.length > 0 ? preferred : users
@@ -175,6 +209,8 @@ function startNotificationStream(userId: string) {
 onMounted(() => {
   authStore.hydrate()
   refreshUnreadNotifications()
+  refreshUserDirectory()
+  refreshSubscribedChannels()
   window.addEventListener('notifications-updated', handleNotificationsUpdated)
   window.addEventListener('click', closeNotificationCenterByOutsideClick)
 })
@@ -190,10 +226,13 @@ watch(
   (userId) => {
     refreshUnreadNotifications()
     if (!userId) {
+      allUsers.value = []
       stopNotificationStream()
       return
     }
     startNotificationStream(userId)
+    refreshUserDirectory()
+    refreshSubscribedChannels()
   },
   { immediate: true },
 )
@@ -298,7 +337,7 @@ function submitSearch() {
                 :class="{ unread: !item.isRead }"
                 @click="goToInbox"
               >
-                <p>{{ item.title }}</p>
+                <p>{{ quickNotificationTitle(item.title) }}</p>
                 <small>{{ new Date(item.createdAt).toLocaleString() }}</small>
               </article>
             </div>
@@ -551,6 +590,9 @@ function submitSearch() {
   margin-top: 8px;
   display: grid;
   gap: 6px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .dropdown-item {
@@ -568,6 +610,9 @@ function submitSearch() {
 .dropdown-item p {
   color: #e5e7eb;
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dropdown-item small {
