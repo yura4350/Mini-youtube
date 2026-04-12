@@ -7,6 +7,7 @@ import { formatViews } from '@/services/video-format'
 import { fetchVideoById, fetchVideos, updateVideo, deleteVideo } from '@/services/videos'
 import { toApiUploaderId } from '@/services/user-id'
 import { recordWatchEvent, fetchSubscribedChannelIds, subscribeToChannel, unsubscribeFromChannel } from '@/services/dashboard'
+import { summarizeVideo } from '@/services/intelligence'
 import { useAuthStore } from '@/stores/auth'
 import type { VideoItem } from '@/types/video'
 
@@ -25,6 +26,11 @@ const editMessage = ref('')
 const subscribeLoading = ref(false)
 const subscribeMessage = ref('')
 const subscribedChannelIds = ref<string[]>([])
+const aiSummary = ref('')
+const aiSummarySource = ref('')
+const aiSummaryGeneratedAt = ref('')
+const aiSummaryLoading = ref(false)
+const aiSummaryError = ref('')
 const chatMessages = ref<ChatMessage[]>([])
 const chatInput = ref('')
 const chatConnected = ref(false)
@@ -362,10 +368,32 @@ async function toggleSubscription() {
   }
 }
 
+async function generateAiSummary() {
+  if (!currentVideo.value) return
+
+  aiSummaryLoading.value = true
+  aiSummaryError.value = ''
+
+  try {
+    const result = await summarizeVideo({ videoId: currentVideo.value.id, maxSentences: 3 })
+    aiSummary.value = result.summary
+    aiSummarySource.value = result.source_kind
+    aiSummaryGeneratedAt.value = result.generated_at
+  } catch (error) {
+    aiSummaryError.value = error instanceof Error ? error.message : 'Failed to generate AI summary.'
+  } finally {
+    aiSummaryLoading.value = false
+  }
+}
+
 watch(
   () => route.params.id,
   () => {
     subscribeMessage.value = ''
+    aiSummary.value = ''
+    aiSummarySource.value = ''
+    aiSummaryGeneratedAt.value = ''
+    aiSummaryError.value = ''
     stopRecordingWatchEvents()
     loadCurrentVideo()
   },
@@ -415,6 +443,10 @@ watch(
           <AppIcon name="users" :size="14" />
           {{ subscribeLoading ? 'Updating...' : isSubscribed ? 'Unsubscribe' : 'Subscribe' }}
         </button>
+        <button @click="generateAiSummary" :disabled="aiSummaryLoading" class="btn-ai-summary">
+          <AppIcon name="search" :size="14" />
+          {{ aiSummaryLoading ? 'Generating summary...' : 'AI Summary' }}
+        </button>
         <button v-if="isOwner && !isEditing" @click="startEditing" class="btn-edit">
           <AppIcon name="video" :size="14" /> Edit
         </button>
@@ -423,6 +455,18 @@ watch(
         </button>
       </div>
       <p v-if="subscribeMessage" class="subscribe-error">{{ subscribeMessage }}</p>
+      <p v-if="aiSummaryError" class="subscribe-error">{{ aiSummaryError }}</p>
+
+      <section v-if="aiSummary" class="ai-summary-card">
+        <header>
+          <h2><AppIcon name="search" :size="14" /> AI Summary</h2>
+          <small>
+            Source: {{ aiSummarySource === 'subtitle_text' ? 'subtitles' : 'video metadata' }} •
+            {{ new Date(aiSummaryGeneratedAt).toLocaleString() }}
+          </small>
+        </header>
+        <p>{{ aiSummary }}</p>
+      </section>
 
       <div v-if="isEditing" class="edit-form">
         <h2>Edit Video</h2>
@@ -587,6 +631,20 @@ h1 {
   transition: background-color 150ms ease;
 }
 
+.btn-ai-summary {
+  background: #06b6d4;
+  color: #fff;
+}
+
+.btn-ai-summary:hover:not(:disabled) {
+  background: #0891b2;
+}
+
+.btn-ai-summary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn-subscribe {
   background: #f59e0b;
   color: #111827;
@@ -605,6 +663,40 @@ h1 {
   margin-top: 8px;
   color: #ff9f8b;
   font-size: 14px;
+}
+
+.ai-summary-card {
+  margin-top: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(6, 182, 212, 0.45);
+  background: rgba(6, 182, 212, 0.1);
+  padding: 12px;
+}
+
+.ai-summary-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-summary-card h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #ecfeff;
+  font-size: 15px;
+}
+
+.ai-summary-card small {
+  color: #a5f3fc;
+  font-size: 12px;
+}
+
+.ai-summary-card p {
+  margin-top: 8px;
+  color: #cffafe;
+  line-height: 1.5;
 }
 
 .btn-edit {
