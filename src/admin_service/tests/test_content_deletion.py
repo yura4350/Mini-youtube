@@ -26,11 +26,6 @@ def test_delete_content_removes_video_from_db(client, db):
         assert body["video_id"] == video.id
         assert body["deleted"] is True
 
-        # Verify video is actually deleted from database
-        resp_check = client.get("/admin/metrics")
-        # Video should no longer exist (we can't directly query, but deletion should succeed)
-        assert resp_check.status_code == 200
-
     finally:
         # Clean up temp file if it still exists
         if Path(tmp_path).exists():
