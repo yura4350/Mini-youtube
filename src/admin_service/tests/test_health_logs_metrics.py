@@ -1,31 +1,26 @@
 import logging
 from datetime import datetime, timezone
+from unittest.mock import patch
 
-from src.admin_service.main import app, _memory_handler
+import pytest
 
 
-def test_health_returns_ok():
+def test_health_returns_ok(client):
     """Test GET /health endpoint returns service status."""
-    from tests.test_admin import client as test_client
-
-    with test_client() as c:
-        resp = c.get("/health")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == "ok"
-        assert body["service"] == "admin"
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "admin"
 
 
-def test_admin_health_returns_ok():
+def test_admin_health_returns_ok(client):
     """Test GET /admin/health endpoint returns admin service health."""
-    from tests.test_admin import client as test_client
-
-    with test_client() as c:
-        resp = c.get("/admin/health")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == "ok"
-        assert body["service"] == "admin"
+    resp = client.get("/admin/health")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "admin"
 
 
 def test_logs_returns_formatted_entries(client):
@@ -65,8 +60,12 @@ def test_logs_timestamp_is_iso_format(client):
         datetime.fromisoformat(log["timestamp"])  # Should not raise
 
 
-def test_metrics_returns_performance_data(client):
+@patch("subprocess.check_output")
+def test_metrics_returns_performance_data(mock_ps, client):
     """Test GET /admin/metrics returns all required metrics."""
+    # Mock ps command to return memory usage
+    mock_ps.return_value = b"102400\n"
+
     resp = client.get("/admin/metrics")
     assert resp.status_code == 200
     body = resp.json()
