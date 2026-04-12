@@ -16,8 +16,7 @@ def test_delete_content_removes_video_from_db(client, db):
             db,
             id="vid-001",
             title="Test Video",
-            description="A test video",
-            owner_id=user.id,
+            uploader_id=user.id,
             path=tmp_path,
         )
 
@@ -54,8 +53,7 @@ def test_delete_content_with_missing_file(client, db):
         db,
         id="vid-002",
         title="Video with Missing File",
-        description="File doesn't exist",
-        owner_id=user.id,
+        uploader_id=user.id,
         path="/nonexistent/path/to/video.mp4",
     )
 
@@ -81,8 +79,7 @@ def test_delete_video_with_actual_file(client, db):
             db,
             id="vid-003",
             title="Video with Real File",
-            description="Has actual file",
-            owner_id=user.id,
+            uploader_id=user.id,
             path=tmp_path,
         )
 
@@ -106,16 +103,14 @@ def test_delete_multiple_videos_independently(client, db):
         db,
         id="vid-del-1",
         title="Video 1",
-        description="First",
-        owner_id=user.id,
+        uploader_id=user.id,
         path="/tmp/vid1.mp4",
     )
     video2 = seed_video(
         db,
         id="vid-del-2",
         title="Video 2",
-        description="Second",
-        owner_id=user.id,
+        uploader_id=user.id,
         path="/tmp/vid2.mp4",
     )
 
