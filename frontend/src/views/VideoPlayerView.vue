@@ -443,7 +443,7 @@ watch(
           <AppIcon name="users" :size="14" />
           {{ subscribeLoading ? 'Updating...' : isSubscribed ? 'Unsubscribe' : 'Subscribe' }}
         </button>
-        <button @click="generateAiSummary" :disabled="aiSummaryLoading" class="btn-ai-summary">
+        <button @click="generateAiSummary" :disabled="aiSummaryLoading" class="btn-ai-summary" :class="{ loading: aiSummaryLoading }">
           <AppIcon name="search" :size="14" />
           {{ aiSummaryLoading ? 'Generating summary...' : 'AI Summary' }}
         </button>
@@ -457,15 +457,18 @@ watch(
       <p v-if="subscribeMessage" class="subscribe-error">{{ subscribeMessage }}</p>
       <p v-if="aiSummaryError" class="subscribe-error">{{ aiSummaryError }}</p>
 
-      <section v-if="aiSummary" class="ai-summary-card">
-        <header>
+      <section v-if="aiSummaryLoading || aiSummary" class="ai-summary-card">
+        <header class="ai-summary-head">
           <h2><AppIcon name="search" :size="14" /> AI Summary</h2>
-          <small>
-            Source: {{ aiSummarySource === 'subtitle_text' ? 'subtitles' : 'video metadata' }} •
-            {{ new Date(aiSummaryGeneratedAt).toLocaleString() }}
-          </small>
+          <div class="ai-summary-meta" v-if="aiSummary">
+            <span class="ai-chip">{{ aiSummarySource === 'subtitle_text' ? 'Subtitles' : 'Metadata' }}</span>
+            <small class="ai-time">{{ new Date(aiSummaryGeneratedAt).toLocaleString() }}</small>
+          </div>
         </header>
-        <p>{{ aiSummary }}</p>
+        <p v-if="aiSummaryLoading && !aiSummary" class="ai-summary-placeholder">
+          Crafting a concise summary...
+        </p>
+        <p v-else class="ai-summary-text">{{ aiSummary }}</p>
       </section>
 
       <div v-if="isEditing" class="edit-form">
@@ -618,6 +621,7 @@ h1 {
 .btn-edit,
 .btn-delete,
 .btn-subscribe,
+.btn-ai-summary,
 .btn-save,
 .btn-cancel {
   display: inline-flex;
@@ -632,17 +636,37 @@ h1 {
 }
 
 .btn-ai-summary {
-  background: #06b6d4;
-  color: #fff;
+  background: linear-gradient(135deg, #1f2937, #111827);
+  color: #e6f6fb;
+  border: 1px solid rgba(34, 211, 238, 0.44);
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 6px 16px rgba(2, 6, 23, 0.35);
+  transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease, border-color 160ms ease;
 }
 
 .btn-ai-summary:hover:not(:disabled) {
-  background: #0891b2;
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #273548, #172033);
+  border-color: rgba(34, 211, 238, 0.7);
+  box-shadow: 0 9px 20px rgba(8, 47, 73, 0.4);
+}
+
+.btn-ai-summary.loading {
+  border-color: rgba(103, 232, 249, 0.9);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.2), 0 9px 20px rgba(8, 47, 73, 0.4);
 }
 
 .btn-ai-summary:disabled {
-  opacity: 0.6;
+  opacity: 0.8;
   cursor: not-allowed;
+}
+
+.btn-ai-summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.35), 0 9px 20px rgba(8, 47, 73, 0.4);
 }
 
 .btn-subscribe {
@@ -667,16 +691,33 @@ h1 {
 
 .ai-summary-card {
   margin-top: 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(6, 182, 212, 0.45);
-  background: rgba(6, 182, 212, 0.1);
-  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.34);
+  background: linear-gradient(155deg, rgba(3, 105, 161, 0.2), rgba(12, 74, 110, 0.12));
+  padding: 13px 14px;
+  position: relative;
+  overflow: hidden;
 }
 
-.ai-summary-card header {
+.ai-summary-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, #22d3ee, #0ea5e9);
+}
+
+.ai-summary-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ai-summary-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
 }
 
@@ -684,19 +725,40 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #ecfeff;
-  font-size: 15px;
+  color: #f0f9ff;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
-.ai-summary-card small {
+.ai-chip {
+  border: 1px solid rgba(103, 232, 249, 0.42);
+  background: rgba(14, 116, 144, 0.25);
   color: #a5f3fc;
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
-.ai-summary-card p {
+.ai-time {
+  color: #bae6fd;
+  font-size: 11px;
+}
+
+.ai-summary-placeholder,
+.ai-summary-text {
   margin-top: 8px;
-  color: #cffafe;
+  color: #e0f2fe;
   line-height: 1.5;
+  font-size: 14px;
+}
+
+.ai-summary-placeholder {
+  opacity: 0.88;
+  font-style: italic;
 }
 
 .btn-edit {
