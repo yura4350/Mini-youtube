@@ -3,7 +3,7 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
 # Set DATABASE_URL before importing main.py
@@ -45,7 +45,15 @@ def setup_db():
 
 
 @pytest.fixture
-def client():
+def db():
+    """Provide direct database session for seeding test data."""
+    db_session = TestingSessionLocal()
+    yield db_session
+    db_session.close()
+
+
+@pytest.fixture
+def client(db):
     """Provide a TestClient with overridden database dependency."""
     app.dependency_overrides.clear()
     app.dependency_overrides[get_db] = override_get_db
@@ -55,6 +63,7 @@ def client():
 
 
 def seed_user(
+    db: Session,
     *,
     name: str,
     email: str,
@@ -62,24 +71,21 @@ def seed_user(
     is_active: bool = True,
 ):
     """Seed a test user into the test database."""
-    db = TestingSessionLocal()
-    try:
-        user = User(
-            name=name,
-            email=email,
-            role=role,
-            hashed_pwd="hashed_password_mock",
-            is_active=is_active,
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        return user
-    finally:
-        db.close()
+    user = User(
+        name=name,
+        email=email,
+        role=role,
+        hashed_pwd="hashed_password_mock",
+        is_active=is_active,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def seed_video(
+    db: Session,
     *,
     id: str,
     title: str,
@@ -89,19 +95,15 @@ def seed_video(
     views: int = 0,
 ):
     """Seed a test video into the test database."""
-    db = TestingSessionLocal()
-    try:
-        video = Video(
-            id=id,
-            title=title,
-            description=description,
-            owner_id=owner_id,
-            path=path,
-            views=views,
-        )
-        db.add(video)
-        db.commit()
-        db.refresh(video)
-        return video
-    finally:
-        db.close()
+    video = Video(
+        id=id,
+        title=title,
+        description=description,
+        owner_id=owner_id,
+        path=path,
+        views=views,
+    )
+    db.add(video)
+    db.commit()
+    db.refresh(video)
+    return video
