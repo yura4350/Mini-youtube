@@ -61,7 +61,7 @@ def seed_user(
     role: str,
     is_active: bool = True,
 ):
-    """Seed a test user into the database."""
+    """Seed a test user into the test database."""
     db = TestingSessionLocal()
     try:
         user = User(
@@ -88,7 +88,7 @@ def seed_video(
     path: str,
     views: int = 0,
 ):
-    """Seed a test video into the database."""
+    """Seed a test video into the test database."""
     db = TestingSessionLocal()
     try:
         video = Video(
