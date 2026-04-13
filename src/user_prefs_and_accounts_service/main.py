@@ -55,6 +55,11 @@ class UserCreate(BaseModel):
     role:str
     password:str
 
+class UserUpdate(BaseModel):
+    name:str
+    bio:str
+    avatar:str # for now, we will use a string to store the avatar url
+
 class UserResponse(BaseModel): # Determines what is given by a model
     id:int
     name:str
@@ -283,15 +288,15 @@ def update_user(user_id:int, update_user:UserCreate, current_user:User = Depends
 
 # Endpoint to let user update himself
 @app.put("/user/profile/edit", response_model=UserResponse)
-def update_user(update_user:UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+def update_user(update_user:UserUpdate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
     db_user = db.query(User).filter(User.id == current_user.id).first()
 
     if not db_user:
         raise HTTPException(status_code=404, detail="User does not exist")
     
     db_user.name = update_user.name
-    db_user.email = update_user.email
-    db_user.role = update_user.role
+    db_user.bio = update_user.bio
+    db_user.avatar = update_user.avatar
 
 
     db.commit()
