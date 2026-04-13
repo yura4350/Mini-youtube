@@ -1,7 +1,13 @@
 import { mapVideoApiItemToVideoItem, type VideoApiItem, type VideoItem } from '@/types/video'
 
+const DEFAULT_HOST =
+  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? '127.0.0.1'
+    : typeof window !== 'undefined'
+      ? window.location.hostname
+      : 'localhost'
 const DASHBOARD_API_BASE_URL = (
-  import.meta.env.VITE_DASHBOARD_API_BASE_URL || 'http://localhost:8004'
+  import.meta.env.VITE_DASHBOARD_API_BASE_URL || `http://${DEFAULT_HOST}:8004`
 ).replace(/\/$/, '')
 
 async function parseError(response: Response): Promise<string> {

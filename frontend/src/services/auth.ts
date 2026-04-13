@@ -1,8 +1,14 @@
 import type { AuthResult, LoginPayload, RegisterPayload, User, BackendUser, BackendToken } from '@/types/auth'
 
 // Use the environment variable of where the backend is hosted
+const DEFAULT_HOST =
+  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? '127.0.0.1'
+    : typeof window !== 'undefined'
+      ? window.location.hostname
+      : 'localhost'
 const AUTH_API_BASE_URL = (
-  import.meta.env.VITE_AUTH_API_BASE_URL || 'http://localhost:8003'
+  import.meta.env.VITE_AUTH_API_BASE_URL || `http://${DEFAULT_HOST}:8003`
 ).replace(/\/$/, '')
 
 // Simple String constants, names to save and retrieve data in the browser's localStorage

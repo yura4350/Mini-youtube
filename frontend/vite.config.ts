@@ -15,4 +15,7 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
+  server: {
+    allowedHosts: ['vcm-52418.vm.duke.edu', 'localhost', '127.0.0.1'],
+  },
 })

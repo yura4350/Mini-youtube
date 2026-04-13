@@ -27,3 +27,17 @@ frontend_checks:
       else
         echo "No frontend/package.json found."
       fi
+
+vm_health_checks:
+  stage: test
+  image: curlimages/curl:8.12.1
+  when: manual
+  allow_failure: true
+  script:
+    - curl -fsS http://vcm-52418.vm.duke.edu:5173 >/dev/null
+    - curl -fsS http://vcm-52418.vm.duke.edu:8000/health
+    - curl -fsS http://vcm-52418.vm.duke.edu:8001/health
+    - curl -fsS http://vcm-52418.vm.duke.edu:8002/health
+    - curl -fsS http://vcm-52418.vm.duke.edu:8003/health
+    - curl -fsS http://vcm-52418.vm.duke.edu:8004/health
+    - curl -fsS http://vcm-52418.vm.duke.edu:8004/dashboard/recommend
