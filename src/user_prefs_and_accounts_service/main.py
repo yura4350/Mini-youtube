@@ -83,6 +83,29 @@ def verify_pwd(plain_pwd: str, hashed_pwd: str) -> bool:
 def get_pwd_hash(password:str) -> str:
     return pwd_context.hash(password)
 
+def seed_admin_user() -> None:
+    email = (os.getenv("SEED_ADMIN_EMAIL") or "").strip()
+    password = (os.getenv("SEED_ADMIN_PASSWORD") or "").strip()
+    if not email or not password:
+        return
+
+    db = SessionLocal()
+    try:
+        if db.query(User).filter(User.email == email).first():
+            return
+        db.add(
+            User(
+                name=(os.getenv("SEED_ADMIN_NAME") or "Admin").strip() or "Admin",
+                email=email,
+                role="admin",
+                hashed_pwd=get_pwd_hash(password),
+                is_active=True,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
 # generate dicrionary to hold access token
 def create_access_token(data:dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -147,6 +170,8 @@ def get_current_active_user(current_user: User = Depends(get_current_user)):
     return current_user
 
 app = FastAPI(title="User Accounts Service")
+
+seed_admin_user() # add admin user to the database on startup
 
 app.add_middleware(
     CORSMiddleware,
