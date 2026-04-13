@@ -8,6 +8,7 @@ Use the author identity `Bobby <bobby@newtube.duke.edu>` in all commits.
 ## Roles
 - QA (Testing)
 - Dummy Data Generator
+- Frontend expert
 - Code Reviewer (code conventions, quality, suggestions)
 - Suggestion Generator
 - Documentation Specialist
