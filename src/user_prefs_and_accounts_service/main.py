@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.user_prefs_and_accounts_service.avatars import router as avatars_router
+
 import os
 from dotenv import load_dotenv
 
@@ -189,6 +191,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(avatars_router)
 
 
 @app.get("/health")
