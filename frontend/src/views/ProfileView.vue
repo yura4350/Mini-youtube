@@ -23,6 +23,41 @@ const form = reactive({
   bio: '',
 })
 
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const avatarUploading = ref(false)
+const avatarCacheBust = ref(0)
+
+function avatarDisplayUrl(): string {
+  const u = authStore.currentUser?.avatar
+  if (!u) return ''
+  const sep = u.includes('?') ? '&' : '?'
+  return avatarCacheBust.value ? `${u}${sep}t=${avatarCacheBust.value}` : u
+}
+
+function openAvatarPicker() {
+  fileInputRef.value?.click()
+}
+
+async function onAvatarFileChange(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+
+  avatarUploading.value = true
+  message.value = ''
+  const result = await authStore.uploadProfileAvatar(file)
+  avatarUploading.value = false
+
+  if (!result.ok) {
+    message.value = result.message
+    return
+  }
+
+  avatarCacheBust.value = Date.now()
+  message.value = result.message
+}
+
 watchEffect(() => {
   if (!authStore.currentUser) return
   form.username = authStore.currentUser.username
@@ -83,7 +118,25 @@ onMounted(() => {
 <template>
   <main v-if="authStore.currentUser" class="profile-page">
     <section class="profile-header">
-      <img :src="authStore.currentUser.avatar" :alt="authStore.currentUser.username" class="avatar" />
+      <div class="avatar-wrap">
+        <img :src="avatarDisplayUrl()" :alt="authStore.currentUser.username" class="avatar" />
+        <input
+          ref="fileInputRef"
+          type="file"
+          class="sr-only"
+          accept="image/jpeg,image/png,image/webp"
+          @change="onAvatarFileChange"
+        />
+        <button
+          type="button"
+          class="avatar-upload ghost"
+          :disabled="avatarUploading"
+          @click="openAvatarPicker"
+        >
+          <AppIcon name="user" :size="14" />
+          {{ avatarUploading ? 'Uploading…' : 'Change photo' }}
+        </button>
+      </div>
 
       <div class="header-main">
         <h1>{{ authStore.currentUser.username }}</h1>
@@ -177,6 +230,30 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 110px 1fr;
   gap: 14px;
+}
+
+.avatar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.avatar-upload {
+  font-size: 12px;
+  padding: 6px 10px;
 }
 
 .avatar {
