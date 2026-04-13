@@ -31,7 +31,7 @@ const router = createRouter({
     {
       path: '/users/:userId',
       name: 'user-profile',
-      component: () => import('../views/ProfileView.vue'),
+      component: () => import('../views/PublicProfileView.vue'),
     },
     {
       path: '/notifications',
