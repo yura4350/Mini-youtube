@@ -62,9 +62,9 @@ async function loadSubscriptionsFeed() {
   }
 }
 
-function saveProfile() {
+async function saveProfile() {
   message.value = ''
-  const result = authStore.updateProfile({ username: form.username, bio: form.bio })
+  const result = await authStore.updateProfile({ username: form.username, bio: form.bio })
   if (!result.ok) {
     message.value = result.message
     return
