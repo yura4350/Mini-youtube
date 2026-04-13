@@ -9,7 +9,16 @@ from sqlalchemy.pool import StaticPool
 # Must be set before importing application modules that initialize DB engine.
 os.environ["DATABASE_URL"] = "sqlite://"
 
-from src.communication_service.main import app, get_db  # noqa: E402
+from src.communication_service.main import (  # noqa: E402
+    app,
+    get_db,
+    chat_rooms,
+    chat_history,
+    direct_chat_rooms,
+    direct_chat_history,
+    notification_stream_clients,
+    direct_room_active_users,
+)
 from src.video_crud_service.database import Base  # noqa: E402
 
 
@@ -41,3 +50,20 @@ def test_db():
 @pytest.fixture
 def client(test_db):
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def clear_in_memory_state():
+    chat_rooms.clear()
+    chat_history.clear()
+    direct_chat_rooms.clear()
+    direct_chat_history.clear()
+    notification_stream_clients.clear()
+    direct_room_active_users.clear()
+    yield
+    chat_rooms.clear()
+    chat_history.clear()
+    direct_chat_rooms.clear()
+    direct_chat_history.clear()
+    notification_stream_clients.clear()
+    direct_room_active_users.clear()
