@@ -50,7 +50,7 @@ async def upload_avatar(
     if not db_user:
         raise HTTPException(status_code=404, detail="User does not exist")
 
-    db_user.avatar = f"/user/profile/avatar/file/{db_user.id}/{saved_name}"
+    db_user.avatar = f"/user/profile/avatar/file/{saved_name}"
     db.commit()
     db.refresh(db_user)
     return db_user
