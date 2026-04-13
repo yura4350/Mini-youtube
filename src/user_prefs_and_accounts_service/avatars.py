@@ -17,7 +17,7 @@ MAX_AVATAR_BYTES = 5 * 1024 * 1024  # (5MB)
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 
-@router.post("/user/profile/avatar")
+@router.post("/user/profile/avatar", response_model=UserResponse)
 async def upload_avatar(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -41,7 +41,38 @@ async def upload_avatar(
             detail="Unsupported file type",
         )
     
-    
+    saved_name = f"{current_user.id}{suffix}"
+    saved_path = AVATAR_DIR / str(current_user.id) / saved_name
+    saved_path.parent.mkdir(parents=True, exist_ok=True)
+    saved_path.write_bytes(content)
+
+    db_user = db.query(User).filter(User.id == current_user.id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User does not exist")
+
+    db_user.avatar = f"/user/profile/avatar/file/{db_user.id}/{saved_name}"
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@router.get("/user/profile/avatar/file/{user_id}/{filename}")
+def get_avatar_file(user_id: int, filename: str):
+    safe = Path(filename).name
+    path = AVATAR_DIR / str(user_id) / safe
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Avatar not found")
+    if path.suffix.lower() in (".jpg", ".jpeg"):
+        media = "image/jpeg"
+    elif path.suffix.lower() == ".png":
+        media = "image/png"
+    elif path.suffix.lower() == ".webp":
+        media = "image/webp"
+    else:
+        media = "application/octet-stream"
+    return FileResponse(path=str(path), media_type=media, filename=safe)
+
+
+
 
     
 
