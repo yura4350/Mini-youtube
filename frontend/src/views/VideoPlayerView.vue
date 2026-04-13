@@ -443,7 +443,11 @@ watch(
           <AppIcon name="users" :size="14" />
           {{ subscribeLoading ? 'Updating...' : isSubscribed ? 'Unsubscribe' : 'Subscribe' }}
         </button>
+<<<<<<< HEAD
         <button @click="generateAiSummary" :disabled="aiSummaryLoading" class="btn-ai-summary" :class="{ loading: aiSummaryLoading }">
+=======
+        <button @click="generateAiSummary" :disabled="aiSummaryLoading" class="btn-ai-summary">
+>>>>>>> f168ad8 (feat: implement the function of AI summary without true AI)
           <AppIcon name="search" :size="14" />
           {{ aiSummaryLoading ? 'Generating summary...' : 'AI Summary' }}
         </button>
@@ -457,6 +461,7 @@ watch(
       <p v-if="subscribeMessage" class="subscribe-error">{{ subscribeMessage }}</p>
       <p v-if="aiSummaryError" class="subscribe-error">{{ aiSummaryError }}</p>
 
+<<<<<<< HEAD
       <section v-if="aiSummaryLoading || aiSummary" class="ai-summary-card">
         <header class="ai-summary-head">
           <h2><AppIcon name="search" :size="14" /> AI Summary</h2>
@@ -469,6 +474,17 @@ watch(
           Crafting a concise summary...
         </p>
         <p v-else class="ai-summary-text">{{ aiSummary }}</p>
+=======
+      <section v-if="aiSummary" class="ai-summary-card">
+        <header>
+          <h2><AppIcon name="search" :size="14" /> AI Summary</h2>
+          <small>
+            Source: {{ aiSummarySource === 'subtitle_text' ? 'subtitles' : 'video metadata' }} •
+            {{ new Date(aiSummaryGeneratedAt).toLocaleString() }}
+          </small>
+        </header>
+        <p>{{ aiSummary }}</p>
+>>>>>>> f168ad8 (feat: implement the function of AI summary without true AI)
       </section>
 
       <div v-if="isEditing" class="edit-form">
@@ -636,6 +652,7 @@ h1 {
 }
 
 .btn-ai-summary {
+<<<<<<< HEAD
   background: linear-gradient(135deg, #1f2937, #111827);
   color: #e6f6fb;
   border: 1px solid rgba(34, 211, 238, 0.44);
@@ -669,6 +686,21 @@ h1 {
   box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.35), 0 9px 20px rgba(8, 47, 73, 0.4);
 }
 
+=======
+  background: #06b6d4;
+  color: #fff;
+}
+
+.btn-ai-summary:hover:not(:disabled) {
+  background: #0891b2;
+}
+
+.btn-ai-summary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+>>>>>>> f168ad8 (feat: implement the function of AI summary without true AI)
 .btn-subscribe {
   background: #f59e0b;
   color: #111827;
@@ -691,6 +723,7 @@ h1 {
 
 .ai-summary-card {
   margin-top: 12px;
+<<<<<<< HEAD
   border-radius: 14px;
   border: 1px solid rgba(34, 211, 238, 0.34);
   background: linear-gradient(155deg, rgba(3, 105, 161, 0.2), rgba(12, 74, 110, 0.12));
@@ -718,6 +751,18 @@ h1 {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+=======
+  border-radius: 12px;
+  border: 1px solid rgba(6, 182, 212, 0.45);
+  background: rgba(6, 182, 212, 0.1);
+  padding: 12px;
+}
+
+.ai-summary-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+>>>>>>> f168ad8 (feat: implement the function of AI summary without true AI)
   gap: 8px;
 }
 
@@ -725,6 +770,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+<<<<<<< HEAD
   color: #f0f9ff;
   font-size: 14px;
   letter-spacing: 0.02em;
@@ -759,6 +805,21 @@ h1 {
 .ai-summary-placeholder {
   opacity: 0.88;
   font-style: italic;
+=======
+  color: #ecfeff;
+  font-size: 15px;
+}
+
+.ai-summary-card small {
+  color: #a5f3fc;
+  font-size: 12px;
+}
+
+.ai-summary-card p {
+  margin-top: 8px;
+  color: #cffafe;
+  line-height: 1.5;
+>>>>>>> f168ad8 (feat: implement the function of AI summary without true AI)
 }
 
 .btn-edit {
