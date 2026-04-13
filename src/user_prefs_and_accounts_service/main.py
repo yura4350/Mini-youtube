@@ -294,9 +294,12 @@ def update_user(update_user:UserUpdate, current_user:User = Depends(get_current_
     if not db_user:
         raise HTTPException(status_code=404, detail="User does not exist")
     
-    db_user.name = update_user.name
-    db_user.bio = update_user.bio
-    db_user.avatar = update_user.avatar
+    if update_user.name is not None:
+        db_user.name = update_user.name
+    if update_user.bio is not None:
+        db_user.bio = update_user.bio
+    if update_user.avatar is not None:
+        db_user.avatar = update_user.avatar
 
 
     db.commit()
