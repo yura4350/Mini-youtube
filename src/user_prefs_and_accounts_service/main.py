@@ -65,6 +65,8 @@ class UserResponse(BaseModel): # Determines what is given by a model
     name:str
     email:str
     role:str
+    bio:Optional[str] = None
+    avatar:Optional[str] = None
     is_active: bool
 
     class Config:
