@@ -168,6 +168,47 @@ async function hydrateCurrentUser(): Promise<User | null> {
   return user
 }
 
+export type FetchPublicProfileResult =
+  | { ok: true; user: User }
+  | { ok: false; status: number; message: string }
+
+async function fetchPublicProfile(userId: number): Promise<FetchPublicProfileResult> {
+  const token = getToken()
+  if (!token) {
+    return { ok: false, status: 401, message: 'Sign in to view profiles.' }
+  }
+
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/user/profile/${userId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (response.status === 404) {
+      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      return {
+        ok: false,
+        status: 404,
+        message: err?.detail ?? 'User not found.',
+      }
+    }
+
+    if (response.status === 401) {
+      return { ok: false, status: 401, message: 'Session expired or invalid. Sign in again.' }
+    }
+
+    if (!response.ok) {
+      return { ok: false, status: response.status, message: 'Failed to load profile.' }
+    }
+
+    const backendUser = (await response.json()) as BackendUser
+    return { ok: true, user: mapBackendUser(backendUser) }
+  } catch {
+    return { ok: false, status: 0, message: 'Unable to reach auth service.' }
+  }
+}
+
 // Keep compatibility with existing UI code that calls getAllUsers()
 async function getAllUsers(): Promise<User[]> {
   const token = getToken()
@@ -227,6 +268,7 @@ export const authService = {
   hydrateCurrentUser,
   getCurrentUser,
   getAllUsers,
+  fetchPublicProfile,
   updateCurrentUser,
   logout,
 }
