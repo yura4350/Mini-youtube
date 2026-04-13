@@ -58,6 +58,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     name:Optional[str] = None
     bio:Optional[str] = None
+    avatar:Optional[str] = None
 
 class UserResponse(BaseModel): # Determines what is given by a model
     id:int
@@ -303,6 +304,8 @@ def update_user(update_user:UserUpdate, current_user:User = Depends(get_current_
         db_user.name = update_user.name
     if update_user.bio is not None:
         db_user.bio = update_user.bio
+    if update_user.avatar is not None:
+        db_user.avatar = update_user.avatar
 
 
     db.commit()
