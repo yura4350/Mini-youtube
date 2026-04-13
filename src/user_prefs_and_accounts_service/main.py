@@ -56,9 +56,9 @@ class UserCreate(BaseModel):
     password:str
 
 class UserUpdate(BaseModel):
-    name:str
-    bio:str
-    avatar:str # for now, we will use a string to store the avatar url
+    name:Optional[str] = None
+    bio:Optional[str] = None
+    avatar:Optional[str] = None
 
 class UserResponse(BaseModel): # Determines what is given by a model
     id:int
