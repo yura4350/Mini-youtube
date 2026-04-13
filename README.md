@@ -26,18 +26,53 @@ FastAPI docs, SQLAlchemy docs, PostgreSQL docs, Docker docs.
 
 ### Running the Program
 
-Main class:
+#### Repository
 
-Data files needed: 
+- GitLab URL: https://coursework.cs.duke.edu/compsci590_2026spring/media_server_team02.git
+- Dev host: vcm-52418.vm.duke.edu
 
-Inputs:
+#### Branch Workflow
 
-Known Bugs:
+- Typical flow:
+	1. Push local changes to GitLab.
+	2. Pull branch on VM.
+	3. Rebuild/restart containers.
+
+#### VM Setup (for Team Access)
+
+```bash
+ssh <netid>@vcm-52418.vm.duke.edu
+cd ~/media_server_team02
+git fetch origin
+git checkout dev
+git pull origin dev
+docker compose down
+docker compose up -d --build
+```
+
+#### Local Setup
+
+```bash
+git clone https://coursework.cs.duke.edu/compsci590_2026spring/media_server_team02.git
+cd media_server_team02
+git checkout dev
+docker compose up -d --build
+```
+
+Open services:
+
+- Frontend: http://localhost:5173
+- Video API: http://localhost:8000
+- Admin API: http://localhost:8001
+- Communication API: http://localhost:8002
+- User Accounts API: http://localhost:8003
+- Dashboard API: http://localhost:8004
 
 
 ### Notes/Assumptions
 
-Runs via Docker Compose with api + db services.
+- Services are containerized and started with Docker Compose.
+- After pulling new code, prefer `docker compose up -d --build` so latest code is applied.
 
 ### Impressions
 
