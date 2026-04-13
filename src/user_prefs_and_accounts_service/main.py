@@ -41,6 +41,8 @@ class User(Base):
     name = Column(String, nullable = False)
     email = Column(String, nullable = False, unique=True)
     role = Column(String, nullable = False)
+    bio = Column(String, nullable = True)
+    avatar = Column(String, nullable = True)
     hashed_pwd = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
 
