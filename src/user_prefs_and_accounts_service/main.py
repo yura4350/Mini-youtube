@@ -190,6 +190,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from src.user_prefs_and_accounts_service.avatars import router as avatars_router
+
+app.include_router(avatars_router)
+
 
 @app.get("/health")
 def health():

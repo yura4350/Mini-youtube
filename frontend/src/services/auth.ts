@@ -9,6 +9,23 @@ const AUTH_API_BASE_URL = (
 const ACCESS_TOKEN_KEY = 'media_frontend_access_token'
 const CURRENT_USER_KEY = 'media_frontend_current_user'
 
+const DEFAULT_AVATAR_URL =
+  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
+
+const AVATAR_FILE_PREFIX = '/user/profile/avatar/file/'
+
+/** Turn stored profile paths into a browser-usable URL (uploads live under /file/{userId}/{filename}). */
+function resolveAvatarUrl(avatar: string | null | undefined, backendUserId: number): string {
+  if (avatar == null || avatar === '') return DEFAULT_AVATAR_URL
+  if (avatar.startsWith('http://') || avatar.startsWith('https://')) return avatar
+  if (avatar.startsWith(AVATAR_FILE_PREFIX)) {
+    const filename = avatar.slice(AVATAR_FILE_PREFIX.length)
+    return `${AUTH_API_BASE_URL}${AVATAR_FILE_PREFIX}${backendUserId}/${filename}`
+  }
+  if (avatar.startsWith('/')) return `${AUTH_API_BASE_URL}${avatar}`
+  return avatar
+}
+
 // Maps the data returned by a backend to the frontend
 function mapBackendUser(u: BackendUser): User {
   return {
@@ -16,7 +33,7 @@ function mapBackendUser(u: BackendUser): User {
     username: u.name,
     email: u.email,
     bio: u.bio ?? '',
-    avatar: u.avatar ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+    avatar: resolveAvatarUrl(u.avatar, u.id),
     isAdmin: u.role === 'admin',
     subscribedTo: [],
     notifications: [],
@@ -251,7 +268,6 @@ async function updateCurrentUser(update: Pick<User, 'username' | 'bio'>): Promis
       body: JSON.stringify({
         name: update.username.trim(),
         bio: update.bio.trim(),
-        avatar: current.avatar,
       }),
     })
     if (response.status === 401) {
@@ -275,10 +291,74 @@ async function updateCurrentUser(update: Pick<User, 'username' | 'bio'>): Promis
       email: mapped.email,
       isAdmin: mapped.isAdmin,
       bio: update.bio.trim(),
-      avatar: current.avatar,
+      avatar: mapped.avatar,
     }
     saveCurrentUser(next)
     return { ok: true, message: 'Profile saved.', user: next }
+  } catch {
+    return { ok: false, message: 'Unable to reach auth service.', user: null }
+  }
+}
+
+async function uploadAvatar(file: File): Promise<AuthResult> {
+  const token = getToken()
+  if (!token) {
+    return { ok: false, message: 'No active session.', user: null }
+  }
+
+  const current = getCurrentUser()
+  if (!current) {
+    return { ok: false, message: 'No active user session.', user: null }
+  }
+
+  const formData = new FormData()
+  formData.append('file', file)
+
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/user/profile/avatar`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    })
+
+    if (response.status === 401) {
+      logout()
+      return { ok: false, message: 'Session expired. Sign in again.', user: null }
+    }
+
+    if (response.status === 400) {
+      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      return {
+        ok: false,
+        message: err?.detail ?? 'Invalid image. Use JPEG, PNG, or WebP under 5MB.',
+        user: null,
+      }
+    }
+
+    if (!response.ok) {
+      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      return {
+        ok: false,
+        message: err?.detail ?? 'Avatar upload failed.',
+        user: null,
+      }
+    }
+
+    const backendUser = (await response.json()) as BackendUser
+    const mapped = mapBackendUser(backendUser)
+    const next: User = {
+      ...current,
+      id: mapped.id,
+      username: mapped.username,
+      email: mapped.email,
+      bio: mapped.bio,
+      isAdmin: mapped.isAdmin,
+      avatar: mapped.avatar,
+    }
+    saveCurrentUser(next)
+    return { ok: true, message: 'Profile photo updated.', user: next }
   } catch {
     return { ok: false, message: 'Unable to reach auth service.', user: null }
   }
@@ -299,5 +379,6 @@ export const authService = {
   getAllUsers,
   fetchPublicProfile,
   updateCurrentUser,
+  uploadAvatar,
   logout,
 }

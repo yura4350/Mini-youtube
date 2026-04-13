@@ -34,6 +34,14 @@ export const useAuthStore = defineStore('auth', () => {
     return result
   }
 
+  async function uploadProfileAvatar(file: File) {
+    const result = await authService.uploadAvatar(file)
+    if (result.ok) {
+      currentUser.value = result.user
+    }
+    return result
+  }
+
   function logout() {
     authService.logout()
     currentUser.value = null
@@ -46,6 +54,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     register,
     updateProfile,
+    uploadProfileAvatar,
     logout,
   }
 })
