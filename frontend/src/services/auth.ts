@@ -300,6 +300,70 @@ async function updateCurrentUser(update: Pick<User, 'username' | 'bio'>): Promis
   }
 }
 
+async function uploadAvatar(file: File): Promise<AuthResult> {
+  const token = getToken()
+  if (!token) {
+    return { ok: false, message: 'No active session.', user: null }
+  }
+
+  const current = getCurrentUser()
+  if (!current) {
+    return { ok: false, message: 'No active user session.', user: null }
+  }
+
+  const formData = new FormData()
+  formData.append('file', file)
+
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/user/profile/avatar`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    })
+
+    if (response.status === 401) {
+      logout()
+      return { ok: false, message: 'Session expired. Sign in again.', user: null }
+    }
+
+    if (response.status === 400) {
+      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      return {
+        ok: false,
+        message: err?.detail ?? 'Invalid image. Use JPEG, PNG, or WebP under 5MB.',
+        user: null,
+      }
+    }
+
+    if (!response.ok) {
+      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      return {
+        ok: false,
+        message: err?.detail ?? 'Avatar upload failed.',
+        user: null,
+      }
+    }
+
+    const backendUser = (await response.json()) as BackendUser
+    const mapped = mapBackendUser(backendUser)
+    const next: User = {
+      ...current,
+      id: mapped.id,
+      username: mapped.username,
+      email: mapped.email,
+      bio: mapped.bio,
+      isAdmin: mapped.isAdmin,
+      avatar: mapped.avatar,
+    }
+    saveCurrentUser(next)
+    return { ok: true, message: 'Profile photo updated.', user: next }
+  } catch {
+    return { ok: false, message: 'Unable to reach auth service.', user: null }
+  }
+}
+
 // logout 
 function logout() {
   localStorage.removeItem(ACCESS_TOKEN_KEY)
@@ -315,5 +379,6 @@ export const authService = {
   getAllUsers,
   fetchPublicProfile,
   updateCurrentUser,
+  uploadAvatar,
   logout,
 }
