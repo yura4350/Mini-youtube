@@ -43,6 +43,8 @@ export interface BackendUser { // mathches UserResponse
   email: string
   role: string
   is_active: boolean
+  bio?: string | null
+  avatar?: string | null
 }
 
 export interface BackendToken { // matches Token

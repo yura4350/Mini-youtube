@@ -41,6 +41,8 @@ class User(Base):
     name = Column(String, nullable = False)
     email = Column(String, nullable = False, unique=True)
     role = Column(String, nullable = False)
+    bio = Column(String, nullable = True)
+    avatar = Column(String, nullable = True)
     hashed_pwd = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
 
@@ -53,11 +55,18 @@ class UserCreate(BaseModel):
     role:str
     password:str
 
+class UserUpdate(BaseModel):
+    name:Optional[str] = None
+    bio:Optional[str] = None
+    avatar:Optional[str] = None
+
 class UserResponse(BaseModel): # Determines what is given by a model
     id:int
     name:str
     email:str
     role:str
+    bio:Optional[str] = None
+    avatar:Optional[str] = None
     is_active: bool
 
     class Config:
@@ -281,15 +290,18 @@ def update_user(user_id:int, update_user:UserCreate, current_user:User = Depends
 
 # Endpoint to let user update himself
 @app.put("/user/profile/edit", response_model=UserResponse)
-def update_user(update_user:UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+def update_user(update_user:UserUpdate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
     db_user = db.query(User).filter(User.id == current_user.id).first()
 
     if not db_user:
         raise HTTPException(status_code=404, detail="User does not exist")
     
-    db_user.name = update_user.name
-    db_user.email = update_user.email
-    db_user.role = update_user.role
+    if update_user.name is not None:
+        db_user.name = update_user.name
+    if update_user.bio is not None:
+        db_user.bio = update_user.bio
+    if update_user.avatar is not None:
+        db_user.avatar = update_user.avatar
 
 
     db.commit()

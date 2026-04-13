@@ -15,8 +15,8 @@ function mapBackendUser(u: BackendUser): User {
     id: String(u.id),
     username: u.name,
     email: u.email,
-    bio: '',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+    bio: u.bio ?? '',
+    avatar: u.avatar ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
     isAdmin: u.role === 'admin',
     subscribedTo: [],
     notifications: [],
@@ -231,7 +231,7 @@ async function getAllUsers(): Promise<User[]> {
 }
 
 // Keep local profile update for now (backend endpoint currently expects full UserCreate)
-function updateCurrentUser(update: Pick<User, 'username' | 'bio'>): AuthResult {
+async function updateCurrentUser(update: Pick<User, 'username' | 'bio'>): Promise<AuthResult> {
   const current = getCurrentUser()
   if (!current) {
     return {
@@ -241,17 +241,46 @@ function updateCurrentUser(update: Pick<User, 'username' | 'bio'>): AuthResult {
     }
   }
 
-  const next: User = {
-    ...current,
-    username: update.username.trim(),
-    bio: update.bio.trim(),
-  }
-
-  saveCurrentUser(next)
-  return {
-    ok: true,
-    message: 'Profile updated locally.',
-    user: next,
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/user/profile/edit`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: update.username.trim(),
+        bio: update.bio.trim(),
+        avatar: current.avatar,
+      }),
+    })
+    if (response.status === 401) {
+      logout()
+      return { ok: false, message: 'Session expired. Sign in again.', user: null }
+    }
+    if (!response.ok) {
+      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      return {
+        ok: false,
+        message: err?.detail ?? 'Profile update failed.',
+        user: null,
+      }
+    }
+    const backendUser = (await response.json()) as BackendUser
+    const mapped = mapBackendUser(backendUser)
+    const next: User = {
+      ...current,
+      id: mapped.id,
+      username: mapped.username,
+      email: mapped.email,
+      isAdmin: mapped.isAdmin,
+      bio: update.bio.trim(),
+      avatar: current.avatar,
+    }
+    saveCurrentUser(next)
+    return { ok: true, message: 'Profile saved.', user: next }
+  } catch {
+    return { ok: false, message: 'Unable to reach auth service.', user: null }
   }
 }
 
