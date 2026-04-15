@@ -59,7 +59,7 @@ class UserPreferences(Base):
     user_id = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     privacy = mapped_column(String, nullable=False, default="public")
     notifications = mapped_column(Boolean, nullable=False, default=True)
-    ui_theme = mapped_column(String, nullable=False, default="system")
+    ui_theme = mapped_column(String, nullable=False, default="dark")
 
     user = relationship("User", back_populates="preferences")
 
