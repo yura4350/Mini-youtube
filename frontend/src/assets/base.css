@@ -24,3 +24,12 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+html[data-ui-theme='light'] {
+  --bg-0: #f4f4f5;
+  --bg-1: #ffffff;
+  --text-main: #111827;
+  --text-muted: #6b7280;
+  --accent: #b91c1c;
+  --accent-soft: #dc2626;
+}

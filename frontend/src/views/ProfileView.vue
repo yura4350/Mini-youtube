@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref, watchEffect } from 'vue'
 import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
-import { authService } from '@/services/auth'
+import { authService, applyDocumentUiTheme } from '@/services/auth'
 import { fetchVideos } from '@/services/videos'
 import { fetchSubscriptionsFeed } from '@/services/dashboard'
 import type { VideoItem } from '@/types/video'
@@ -32,11 +32,13 @@ const avatarCacheBust = ref(0)
 const prefsLoading = ref(false)
 const prefsSavingPrivacy = ref(false)
 const prefsSavingNotifications = ref(false)
+const prefsSavingUi = ref(false)
 const prefsMessage = ref('')
 
 const prefs = reactive({
   privacy: 'public' as 'public' | 'private',
   notifications: true,
+  ui_theme: 'dark' as 'dark' | 'light',
 })
 
 function avatarDisplayUrl(): string {
@@ -124,6 +126,8 @@ async function saveProfile() {
 function applyPrefsFromServer(p: UserPreferencesDTO) {
   prefs.privacy = p.privacy === 'private' ? 'private' : 'public'
   prefs.notifications = p.notifications
+  prefs.ui_theme = p.ui_theme === 'light' ? 'light' : 'dark'
+  applyDocumentUiTheme(prefs.ui_theme)
 }
 
 async function loadPreferences() {
@@ -162,6 +166,19 @@ async function saveNotificationSettings() {
   }
   applyPrefsFromServer(result.preferences)
   prefsMessage.value = 'Notification preferences saved.'
+}
+
+async function saveUiSettings() {
+  prefsSavingUi.value = true
+  prefsMessage.value = ''
+  const result = await authService.updateUserPreferences({ ui_theme: prefs.ui_theme })
+  prefsSavingUi.value = false
+  if (!result.ok) {
+    prefsMessage.value = result.message
+    return
+  }
+  applyPrefsFromServer(result.preferences)
+  prefsMessage.value = 'Appearance saved.'
 }
 
 onMounted(() => {
@@ -279,6 +296,30 @@ onMounted(() => {
           <button type="button" :disabled="prefsSavingNotifications" @click="saveNotificationSettings">
             <AppIcon name="bell" :size="14" />
             {{ prefsSavingNotifications ? 'Saving…' : 'Save notifications' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="preferences">
+      <header>
+        <h2>Appearance</h2>
+        <p class="prefs-hint">Choose light or dark UI. This applies across the app after you save.</p>
+      </header>
+
+      <p v-if="prefsLoading" class="muted">Loading preferences…</p>
+      <div v-else class="prefs-grid">
+        <label class="prefs-field">
+          Theme
+          <select v-model="prefs.ui_theme" class="prefs-select">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
+        <div class="prefs-actions">
+          <button type="button" :disabled="prefsSavingUi" @click="saveUiSettings">
+            <AppIcon name="check" :size="14" />
+            {{ prefsSavingUi ? 'Saving…' : 'Save appearance' }}
           </button>
         </div>
       </div>

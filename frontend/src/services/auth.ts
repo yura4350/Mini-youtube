@@ -168,6 +168,10 @@ async function fetchProfile(token: string): Promise<User | null> {
   const backendUser = (await response.json()) as BackendUser
   const mapped = mapBackendUser(backendUser)
   saveCurrentUser(mapped)
+
+  const prefs = await fetchUserPreferences(token)
+  if (prefs) applyDocumentUiTheme(prefs.ui_theme)
+
   return mapped
 }
 
