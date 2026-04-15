@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey, inspect, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship, mapped_column
 
@@ -64,6 +64,33 @@ class UserPreferences(Base):
     user = relationship("User", back_populates="preferences")
 
 Base.metadata.create_all(engine)
+
+
+def _ensure_users_schema() -> None:
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("users")}
+    required_columns = {
+        "bio": "VARCHAR",
+        "avatar": "VARCHAR",
+    }
+
+    statements = []
+    for column_name, column_definition in required_columns.items():
+        if column_name not in existing_columns:
+            statements.append(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_definition}"))
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(statement)
+
+
+_ensure_users_schema()
 
 # Pydantic Models (Dataclass). Definitions of API Models
 class UserCreate(BaseModel):

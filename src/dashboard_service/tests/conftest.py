@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from src.dashboard_service.main import app
 from src.video_crud_service.database import Base
 from src.dashboard_service.main import get_db
-from src.video_crud_service.models import Video
+from src.video_crud_service.models import Video, VideoTranscript
 from src.dashboard_service.models import SearchHistory, WatchHistory, Subscription
 
 
@@ -110,3 +110,26 @@ def create_test_watch_history(db, user_id="user1", video_id="video1", position_s
     db.commit()
     db.refresh(watch)
     return watch
+
+
+def create_test_transcript(
+    db,
+    video_id: str,
+    transcript_text: str,
+    source: str = "asr",
+    language: str | None = "en",
+    status: str = "ready",
+):
+    transcript = VideoTranscript(
+        video_id=video_id,
+        transcript_text=transcript_text,
+        source=source,
+        status=status,
+        language=language,
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+    db.add(transcript)
+    db.commit()
+    db.refresh(transcript)
+    return transcript

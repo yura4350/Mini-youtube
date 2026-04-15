@@ -4,9 +4,10 @@ import { useRoute, useRouter } from 'vue-router'
 import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { formatViews } from '@/services/video-format'
-import { fetchVideoById, fetchVideos, updateVideo, deleteVideo } from '@/services/videos'
+import { fetchVideoById, fetchVideoTranscript, fetchVideos, updateVideo, deleteVideo } from '@/services/videos'
 import { toApiUploaderId } from '@/services/user-id'
 import { recordWatchEvent, fetchSubscribedChannelIds, subscribeToChannel, unsubscribeFromChannel } from '@/services/dashboard'
+import { summarizeVideo, fetchAiSummaryStatus, retryAiSummary } from '@/services/intelligence'
 import { useAuthStore } from '@/stores/auth'
 import type { VideoItem } from '@/types/video'
 
@@ -25,6 +26,24 @@ const editMessage = ref('')
 const subscribeLoading = ref(false)
 const subscribeMessage = ref('')
 const subscribedChannelIds = ref<string[]>([])
+const aiSummary = ref('')
+const aiSummarySource = ref('')
+const aiSummaryGeneratedAt = ref('')
+const aiSummaryLoading = ref(false)
+const aiSummaryError = ref('')
+const aiSummaryStatus = ref<'idle' | 'pending' | 'queued' | 'processing' | 'ready' | 'failed'>('idle')
+const aiSummaryCached = ref(false)
+const aiSummaryProvider = ref('')
+const aiSummaryRetryCount = ref(0)
+const transcriptText = ref('')
+const transcriptStatus = ref<'idle' | 'pending' | 'queued' | 'processing' | 'ready' | 'failed'>('idle')
+const transcriptLoading = ref(false)
+const transcriptError = ref('')
+const transcriptFailureReason = ref('')
+const transcriptSource = ref('')
+const transcriptLanguage = ref('')
+const transcriptUpdatedAt = ref('')
+const transcriptExpanded = ref(false)
 const chatMessages = ref<ChatMessage[]>([])
 const chatInput = ref('')
 const chatConnected = ref(false)
@@ -66,13 +85,7 @@ const editForm = reactive({
 const playbackUrl = computed(() => {
   if (!currentVideo.value) return ''
 
-  const defaultHost =
-    typeof window !== 'undefined' && window.location.hostname === 'localhost'
-      ? '127.0.0.1'
-      : typeof window !== 'undefined'
-        ? window.location.hostname
-        : 'localhost'
-  const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || `http://${defaultHost}:8000`).replace(/\/$/, '')
+  const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
   const url = currentVideo.value.videoUrl
 
   if (url.startsWith('http://') || url.startsWith('https://')) {
@@ -165,15 +178,9 @@ function connectChat() {
   }
 
   const explicitWsBase = (import.meta.env.VITE_COMM_WS_BASE_URL || '').trim()
-  const defaultHost =
-    typeof window !== 'undefined' && window.location.hostname === 'localhost'
-      ? '127.0.0.1'
-      : typeof window !== 'undefined'
-        ? window.location.hostname
-        : 'localhost'
   const wsBase = explicitWsBase
     ? explicitWsBase.replace(/\/$/, '')
-    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${defaultHost}:8002`
+    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://localhost:8002`
 
   const params = new URLSearchParams({
     video_id: currentVideo.value.id,
@@ -362,10 +369,118 @@ async function toggleSubscription() {
   }
 }
 
+async function generateAiSummary() {
+  if (!currentVideo.value) return
+
+  aiSummaryLoading.value = true
+  aiSummaryError.value = ''
+  aiSummaryStatus.value = 'queued'
+
+  try {
+    let result = await summarizeVideo({ videoId: currentVideo.value.id, maxSentences: 3 })
+    aiSummaryStatus.value = result.status
+    aiSummaryCached.value = result.cached
+    aiSummaryProvider.value = result.provider || ''
+    aiSummaryRetryCount.value = result.retry_count || 0
+
+    for (let i = 0; i < 25 && (result.status === 'queued' || result.status === 'processing'); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 600))
+      result = await fetchAiSummaryStatus(currentVideo.value.id)
+      aiSummaryStatus.value = result.status
+      aiSummaryCached.value = result.cached
+      aiSummaryProvider.value = result.provider || ''
+      aiSummaryRetryCount.value = result.retry_count || 0
+    }
+
+    if (result.status === 'failed') {
+      aiSummary.value = ''
+      aiSummarySource.value = ''
+      aiSummaryGeneratedAt.value = ''
+      aiSummaryError.value = result.error_message || 'AI summary job failed.'
+      return
+    }
+
+    if (result.status === 'ready' && result.summary) {
+      aiSummary.value = result.summary
+      aiSummarySource.value = result.source_kind || ''
+      aiSummaryGeneratedAt.value = result.generated_at || ''
+      return
+    }
+
+    aiSummaryError.value = 'AI summary is still processing. Try again in a moment.'
+  } catch (error) {
+    aiSummaryError.value = error instanceof Error ? error.message : 'Failed to generate AI summary.'
+  } finally {
+    aiSummaryLoading.value = false
+  }
+}
+
+async function retryAiSummaryJob() {
+  if (!currentVideo.value) return
+  aiSummaryLoading.value = true
+  aiSummaryError.value = ''
+  aiSummaryStatus.value = 'queued'
+  aiSummary.value = ''
+  aiSummarySource.value = ''
+  aiSummaryGeneratedAt.value = ''
+  try {
+    await retryAiSummary(currentVideo.value.id, 3)
+    await generateAiSummary()
+  } catch (error) {
+    aiSummaryError.value = error instanceof Error ? error.message : 'Failed to retry AI summary.'
+  } finally {
+    aiSummaryLoading.value = false
+  }
+}
+
+async function loadTranscript() {
+  if (!currentVideo.value) return
+
+  transcriptLoading.value = true
+  transcriptError.value = ''
+
+  try {
+    const result = await fetchVideoTranscript(currentVideo.value.id)
+    transcriptStatus.value = result.status
+    transcriptText.value = result.transcript_text || ''
+    transcriptFailureReason.value = result.error_message || ''
+    transcriptSource.value = result.source || ''
+    transcriptLanguage.value = result.language || ''
+    transcriptUpdatedAt.value = result.updated_at || ''
+  } catch (error) {
+    transcriptError.value = error instanceof Error ? error.message : 'Failed to load transcript.'
+  } finally {
+    transcriptLoading.value = false
+  }
+}
+
+async function toggleTranscriptPanel() {
+  transcriptExpanded.value = !transcriptExpanded.value
+  if (transcriptExpanded.value && transcriptStatus.value === 'idle') {
+    await loadTranscript()
+  }
+}
+
 watch(
   () => route.params.id,
   () => {
     subscribeMessage.value = ''
+    aiSummary.value = ''
+    aiSummarySource.value = ''
+    aiSummaryGeneratedAt.value = ''
+    aiSummaryError.value = ''
+    aiSummaryStatus.value = 'idle'
+    aiSummaryCached.value = false
+    aiSummaryProvider.value = ''
+    aiSummaryRetryCount.value = 0
+    transcriptText.value = ''
+    transcriptStatus.value = 'idle'
+    transcriptError.value = ''
+    transcriptFailureReason.value = ''
+    transcriptSource.value = ''
+    transcriptLanguage.value = ''
+    transcriptUpdatedAt.value = ''
+    transcriptExpanded.value = false
     stopRecordingWatchEvents()
     loadCurrentVideo()
   },
@@ -376,6 +491,7 @@ watch(
   () => {
     connectChat()
     loadMySubscriptions()
+    loadTranscript()
   },
 )
 
@@ -415,6 +531,14 @@ watch(
           <AppIcon name="users" :size="14" />
           {{ subscribeLoading ? 'Updating...' : isSubscribed ? 'Unsubscribe' : 'Subscribe' }}
         </button>
+        <button @click="generateAiSummary" :disabled="aiSummaryLoading" class="btn-ai-summary" :class="{ loading: aiSummaryLoading }">
+          <AppIcon name="search" :size="14" />
+          {{ aiSummaryLoading ? 'Generating summary...' : 'AI Summary' }}
+        </button>
+        <button @click="toggleTranscriptPanel" class="btn-transcript">
+          <AppIcon name="search" :size="14" />
+          {{ transcriptExpanded ? 'Hide Transcript' : 'Auto Transcript' }}
+        </button>
         <button v-if="isOwner && !isEditing" @click="startEditing" class="btn-edit">
           <AppIcon name="video" :size="14" /> Edit
         </button>
@@ -423,6 +547,66 @@ watch(
         </button>
       </div>
       <p v-if="subscribeMessage" class="subscribe-error">{{ subscribeMessage }}</p>
+      <p v-if="aiSummaryError" class="subscribe-error">{{ aiSummaryError }}</p>
+      <p v-if="transcriptError" class="subscribe-error">{{ transcriptError }}</p>
+
+      <section
+        v-if="aiSummaryLoading || aiSummary || aiSummaryStatus === 'queued' || aiSummaryStatus === 'processing' || aiSummaryStatus === 'failed'"
+        class="ai-summary-card"
+      >
+        <header class="ai-summary-head">
+          <h2><AppIcon name="search" :size="14" /> AI Summary</h2>
+          <div class="ai-summary-meta" v-if="aiSummary">
+            <span class="ai-chip">{{ aiSummarySource === 'subtitle_text' ? 'Subtitles' : 'Metadata' }}</span>
+            <small class="ai-time">{{ new Date(aiSummaryGeneratedAt).toLocaleString() }}</small>
+          </div>
+        </header>
+        <p v-if="aiSummaryLoading || aiSummaryStatus === 'queued' || aiSummaryStatus === 'processing'" class="ai-summary-placeholder">
+          Crafting a concise summary...
+        </p>
+        <p v-else-if="aiSummaryStatus === 'failed'" class="transcript-failed">
+          AI summary failed. {{ aiSummaryError || 'Please retry.' }}
+        </p>
+        <p v-else class="ai-summary-text">{{ aiSummary }}</p>
+        <small v-if="aiSummary" class="ai-time">
+          <span v-if="aiSummaryCached">Cached</span>
+          <span v-if="aiSummaryProvider"> • {{ aiSummaryProvider }}</span>
+          <span> • Retries: {{ aiSummaryRetryCount }}</span>
+        </small>
+        <button
+          v-if="aiSummaryStatus === 'failed'"
+          class="transcript-refresh"
+          :disabled="aiSummaryLoading"
+          @click="retryAiSummaryJob"
+        >
+          {{ aiSummaryLoading ? 'Retrying...' : 'Retry Summary' }}
+        </button>
+      </section>
+
+      <section v-if="transcriptExpanded" class="transcript-card">
+        <header class="transcript-head">
+          <h2><AppIcon name="search" :size="14" /> Auto Transcript</h2>
+          <div class="transcript-actions">
+            <button class="transcript-refresh" :disabled="transcriptLoading" @click="loadTranscript">
+              {{ transcriptLoading ? 'Refreshing...' : 'Refresh' }}
+            </button>
+            <button class="transcript-refresh" @click="transcriptExpanded = false">Close</button>
+          </div>
+        </header>
+        <p v-if="transcriptStatus === 'pending' || transcriptStatus === 'queued' || transcriptStatus === 'processing'" class="transcript-note">
+          Transcript is still processing. Try refresh in a moment.
+        </p>
+        <p v-else-if="transcriptStatus === 'failed'" class="transcript-failed">
+          Transcript processing failed. {{ transcriptFailureReason || 'Check video service logs and retry.' }}
+        </p>
+        <p v-else-if="transcriptText" class="transcript-text">{{ transcriptText }}</p>
+        <p v-else class="transcript-note">No transcript yet.</p>
+        <small v-if="transcriptText" class="transcript-meta">
+          Source: {{ transcriptSource || 'unknown' }}
+          <span v-if="transcriptLanguage">• Language: {{ transcriptLanguage }}</span>
+          <span v-if="transcriptUpdatedAt">• Updated: {{ new Date(transcriptUpdatedAt).toLocaleString() }}</span>
+        </small>
+      </section>
 
       <div v-if="isEditing" class="edit-form">
         <h2>Edit Video</h2>
@@ -574,6 +758,8 @@ h1 {
 .btn-edit,
 .btn-delete,
 .btn-subscribe,
+.btn-ai-summary,
+.btn-transcript,
 .btn-save,
 .btn-cancel {
   display: inline-flex;
@@ -585,6 +771,54 @@ h1 {
   font-size: 14px;
   cursor: pointer;
   transition: background-color 150ms ease;
+}
+
+.btn-ai-summary {
+  background: linear-gradient(135deg, #1f2937, #111827);
+  color: #e6f6fb;
+  border: 1px solid rgba(34, 211, 238, 0.44);
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 6px 16px rgba(2, 6, 23, 0.35);
+  transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+.btn-ai-summary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #273548, #172033);
+  border-color: rgba(34, 211, 238, 0.7);
+  box-shadow: 0 9px 20px rgba(8, 47, 73, 0.4);
+}
+
+.btn-ai-summary.loading {
+  border-color: rgba(103, 232, 249, 0.9);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.2), 0 9px 20px rgba(8, 47, 73, 0.4);
+}
+
+.btn-ai-summary:disabled {
+  opacity: 0.8;
+  cursor: not-allowed;
+}
+
+.btn-ai-summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.35), 0 9px 20px rgba(8, 47, 73, 0.4);
+}
+
+.btn-transcript {
+  background: #20242c;
+  color: #e6ecf8;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-transcript:hover {
+  background: #2a303a;
+  border-color: rgba(148, 163, 184, 0.62);
 }
 
 .btn-subscribe {
@@ -605,6 +839,157 @@ h1 {
   margin-top: 8px;
   color: var(--accent-text-mid);
   font-size: 14px;
+}
+
+.ai-summary-card {
+  margin-top: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.34);
+  background: linear-gradient(155deg, rgba(3, 105, 161, 0.2), rgba(12, 74, 110, 0.12));
+  padding: 13px 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-summary-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, #22d3ee, #0ea5e9);
+}
+
+.ai-summary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ai-summary-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.ai-summary-card h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f0f9ff;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.ai-chip {
+  border: 1px solid rgba(103, 232, 249, 0.42);
+  background: rgba(14, 116, 144, 0.25);
+  color: #a5f3fc;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.ai-time {
+  color: #bae6fd;
+  font-size: 11px;
+}
+
+.ai-summary-placeholder,
+.ai-summary-text {
+  margin-top: 8px;
+  color: #e0f2fe;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+.ai-summary-placeholder {
+  opacity: 0.88;
+  font-style: italic;
+}
+
+.transcript-card {
+  margin-top: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #17191f;
+  padding: 12px;
+}
+
+.transcript-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.transcript-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transcript-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #e5e7eb;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.transcript-refresh {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #21242d;
+  color: #eef2ff;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.transcript-refresh:hover:not(:disabled) {
+  background: #2a2f3a;
+}
+
+.transcript-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.transcript-note {
+  margin-top: 8px;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.transcript-failed {
+  margin-top: 8px;
+  color: #fca5a5;
+  font-size: 14px;
+}
+
+.transcript-text {
+  margin-top: 8px;
+  color: #e5e7eb;
+  line-height: 1.55;
+  font-size: 14px;
+  max-height: 180px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.transcript-meta {
+  margin-top: 8px;
+  display: block;
+  color: #94a3b8;
+  font-size: 12px;
 }
 
 .btn-edit {
