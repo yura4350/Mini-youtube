@@ -118,7 +118,7 @@ class UserPreferencesUpdate(BaseModel):
 
 # Function to return user preferences (or create them with default valuesif they don't exist)
 def _get_or_create_user_preferences(db: Session, user_id: int) -> UserPreferences:
-    user_prefs = db.quert(UserPreferences).filter(UserPreferences.user_id == user_id).first()
+    user_prefs = db.query(UserPreferences).filter(UserPreferences.user_id == user_id).first()
 
     # Create new preferences if they don't exist
     if not user_prefs:
