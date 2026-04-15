@@ -86,6 +86,7 @@ class UserResponse(BaseModel): # Determines what is given by a model
     avatar:Optional[str] = None
     is_active: bool
 
+    # Return data as objects instead of dictionaries
     class Config:
         from_attributes = True
 
@@ -101,6 +102,19 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None
 
+class UserPreferencesResponse(BaseModel):
+    user_id: int
+    privacy: str
+    notifications: bool
+    ui_theme: str
+
+    class Config:
+        from_attributes = True
+
+class UserPreferencesUpdate(BaseModel):
+    privacy: Optional[str] = None
+    notifications: Optional[bool] = None
+    ui_theme: Optional[str] = None
 
 # Security Functions
 def verify_pwd(plain_pwd: str, hashed_pwd: str) -> bool:
