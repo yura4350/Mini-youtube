@@ -3,9 +3,11 @@ import { computed, onMounted, reactive, ref, watchEffect } from 'vue'
 import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
+import { authService } from '@/services/auth'
 import { fetchVideos } from '@/services/videos'
 import { fetchSubscriptionsFeed } from '@/services/dashboard'
 import type { VideoItem } from '@/types/video'
+import type { UserPreferencesDTO } from '@/types/auth'
 
 const authStore = useAuthStore()
 const tab = ref<'videos' | 'subscriptions'>('videos')
@@ -26,6 +28,14 @@ const form = reactive({
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const avatarUploading = ref(false)
 const avatarCacheBust = ref(0)
+
+const prefsLoading = ref(false)
+const prefsSavingPrivacy = ref(false)
+const prefsMessage = ref('')
+
+const prefs = reactive({
+  privacy: 'public' as 'public' | 'private',
+})
 
 function avatarDisplayUrl(): string {
   const u = authStore.currentUser?.avatar
@@ -109,9 +119,39 @@ async function saveProfile() {
   message.value = result.message
 }
 
+function applyPrefsFromServer(p: UserPreferencesDTO) {
+  prefs.privacy = p.privacy === 'private' ? 'private' : 'public'
+}
+
+async function loadPreferences() {
+  prefsLoading.value = true
+  prefsMessage.value = ''
+  const p = await authService.fetchUserPreferences()
+  prefsLoading.value = false
+  if (!p) {
+    prefsMessage.value = 'Could not load preferences.'
+    return
+  }
+  applyPrefsFromServer(p)
+}
+
+async function savePrivacySettings() {
+  prefsSavingPrivacy.value = true
+  prefsMessage.value = ''
+  const result = await authService.updateUserPreferences({ privacy: prefs.privacy })
+  prefsSavingPrivacy.value = false
+  if (!result.ok) {
+    prefsMessage.value = result.message
+    return
+  }
+  applyPrefsFromServer(result.preferences)
+  prefsMessage.value = 'Privacy settings saved.'
+}
+
 onMounted(() => {
   loadVideos()
   loadSubscriptionsFeed()
+  loadPreferences()
 })
 </script>
 
@@ -180,6 +220,30 @@ onMounted(() => {
       </div>
     </section>
 
+    <section class="preferences">
+      <header>
+        <h2>Privacy</h2>
+        <p class="prefs-hint">Control whether your profile is visible to other signed-in users.</p>
+      </header>
+
+      <p v-if="prefsLoading" class="muted">Loading preferences…</p>
+      <div v-else class="prefs-grid">
+        <label class="prefs-field">
+          Profile visibility
+          <select v-model="prefs.privacy" class="prefs-select">
+            <option value="public">Public — others can open your profile</option>
+            <option value="private">Private — others see “User not found”</option>
+          </select>
+        </label>
+        <div class="prefs-actions">
+          <button type="button" :disabled="prefsSavingPrivacy" @click="savePrivacySettings">
+            <AppIcon name="check" :size="14" />
+            {{ prefsSavingPrivacy ? 'Saving…' : 'Save privacy' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
     <section class="tabs">
       <button :class="{ active: tab === 'videos' }" @click="tab = 'videos'">
         <AppIcon name="video" :size="14" /> My videos
@@ -207,6 +271,7 @@ onMounted(() => {
     </section>
 
     <p v-if="message" class="ok">{{ message }}</p>
+    <p v-if="prefsMessage" class="ok prefs-toast">{{ prefsMessage }}</p>
   </main>
 </template>
 
@@ -219,6 +284,7 @@ onMounted(() => {
 
 .profile-header,
 .editor,
+.preferences,
 .notification-item {
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -285,6 +351,57 @@ h1 {
 .editor {
   margin-top: 12px;
   padding: 14px;
+}
+
+.preferences {
+  margin-top: 12px;
+  padding: 14px;
+}
+
+.preferences header {
+  margin-bottom: 10px;
+}
+
+.preferences h2 {
+  color: #fff;
+  font-size: 18px;
+}
+
+.prefs-hint {
+  color: #a7adba;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.prefs-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.prefs-field {
+  display: grid;
+  gap: 6px;
+  color: #e9ebef;
+  font-size: 14px;
+}
+
+.prefs-select {
+  max-width: 420px;
+  background: #0f0f0f;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border-radius: 9px;
+  padding: 9px 11px;
+}
+
+.prefs-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.prefs-toast {
+  margin-top: 8px;
 }
 
 .editor header {
