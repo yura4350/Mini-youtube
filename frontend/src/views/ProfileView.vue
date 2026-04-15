@@ -31,10 +31,12 @@ const avatarCacheBust = ref(0)
 
 const prefsLoading = ref(false)
 const prefsSavingPrivacy = ref(false)
+const prefsSavingNotifications = ref(false)
 const prefsMessage = ref('')
 
 const prefs = reactive({
   privacy: 'public' as 'public' | 'private',
+  notifications: true,
 })
 
 function avatarDisplayUrl(): string {
@@ -121,6 +123,7 @@ async function saveProfile() {
 
 function applyPrefsFromServer(p: UserPreferencesDTO) {
   prefs.privacy = p.privacy === 'private' ? 'private' : 'public'
+  prefs.notifications = p.notifications
 }
 
 async function loadPreferences() {
@@ -146,6 +149,19 @@ async function savePrivacySettings() {
   }
   applyPrefsFromServer(result.preferences)
   prefsMessage.value = 'Privacy settings saved.'
+}
+
+async function saveNotificationSettings() {
+  prefsSavingNotifications.value = true
+  prefsMessage.value = ''
+  const result = await authService.updateUserPreferences({ notifications: prefs.notifications })
+  prefsSavingNotifications.value = false
+  if (!result.ok) {
+    prefsMessage.value = result.message
+    return
+  }
+  applyPrefsFromServer(result.preferences)
+  prefsMessage.value = 'Notification preferences saved.'
 }
 
 onMounted(() => {
@@ -189,7 +205,10 @@ onMounted(() => {
             ><AppIcon name="users" :size="14" />
             {{ authStore.currentUser.subscribedTo.length }} subscriptions</span
           >
-          <span><AppIcon name="bell" :size="14" /> Notification inbox enabled</span>
+          <span
+            ><AppIcon name="bell" :size="14" />
+            {{ prefs.notifications ? 'Push-style alerts enabled' : 'Notifications muted in preferences' }}</span
+          >
         </div>
       </div>
     </section>
@@ -239,6 +258,27 @@ onMounted(() => {
           <button type="button" :disabled="prefsSavingPrivacy" @click="savePrivacySettings">
             <AppIcon name="check" :size="14" />
             {{ prefsSavingPrivacy ? 'Saving…' : 'Save privacy' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="preferences">
+      <header>
+        <h2>Notifications</h2>
+        <p class="prefs-hint">Stored on your account; product notifications may still respect this flag as services adopt it.</p>
+      </header>
+
+      <p v-if="prefsLoading" class="muted">Loading preferences…</p>
+      <div v-else class="prefs-grid prefs-notifications">
+        <label class="toggle-row">
+          <input v-model="prefs.notifications" type="checkbox" class="prefs-checkbox" />
+          <span>Enable notification preferences (on)</span>
+        </label>
+        <div class="prefs-actions">
+          <button type="button" :disabled="prefsSavingNotifications" @click="saveNotificationSettings">
+            <AppIcon name="bell" :size="14" />
+            {{ prefsSavingNotifications ? 'Saving…' : 'Save notifications' }}
           </button>
         </div>
       </div>
@@ -383,6 +423,21 @@ h1 {
   gap: 6px;
   color: #e9ebef;
   font-size: 14px;
+}
+
+.prefs-notifications .toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #e9ebef;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.prefs-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: #ef4444;
 }
 
 .prefs-select {
