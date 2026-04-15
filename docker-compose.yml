@@ -19,6 +19,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        INSTALL_ASR_DEPS: "1"
     container_name: media_server_video
     restart: unless-stopped
     depends_on:
@@ -28,6 +30,9 @@ services:
       DATABASE_URL: postgresql://media_user:media_pass@db:5432/media_db
       PYTHONUNBUFFERED: "1"
       COMMUNICATION_API_BASE_URL: http://communication:8002
+      ASR_ENABLED: "true"
+      ASR_MODEL_SIZE: "tiny"
+      ASR_COMPUTE_TYPE: "int8"
     ports:
       - "8000:8000"
     volumes:
@@ -115,15 +120,35 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      intelligence:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://media_user:media_pass@db:5432/media_db
       PYTHONUNBUFFERED: "1"
       COMMUNICATION_API_BASE_URL: http://communication:8002
+      INTELLIGENCE_API_BASE_URL: http://intelligence:8005
     ports:
       - "8004:8004"
     command: ["uvicorn", "src.dashboard_service.main:app", "--host", "0.0.0.0", "--port", "8004"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  intelligence:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: media_server_intelligence
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8005:8005"
+    command: ["uvicorn", "src.intelligence_service.main:app", "--host", "0.0.0.0", "--port", "8005"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8005/health')"]
       interval: 10s
       timeout: 5s
       retries: 10

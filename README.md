@@ -51,6 +51,7 @@ FastAPI docs, SQLAlchemy docs, PostgreSQL docs, Docker docs.
    - Communication service (port 8002)
    - User accounts & preferences service (port 8003)
    - Dashboard service (port 8004)
+   - Intelligence service (port 8005)
    - Frontend (Vue.js) on port 5173
 
 3. **Verify services are running:**
@@ -71,6 +72,7 @@ The dev branch is hosted on `vcm-52418.vm.duke.edu`. Access services using:
 | Communication API | `http://vcm-52418.vm.duke.edu:8002` | Communication service |
 | User Accounts & Prefs API | `http://vcm-52418.vm.duke.edu:8003` | User management |
 | Dashboard API | `http://vcm-52418.vm.duke.edu:8004` | Dashboard data |
+| Intelligence API | `http://vcm-52418.vm.duke.edu:8005` | AI summarize/tagging service |
 
 Ensure your machine can reach `vcm-52418.vm.duke.edu` on these ports (may require Duke network access).
 
@@ -97,7 +99,16 @@ docker-compose logs -f video  # Specific service (video, admin, communication, e
 - **Services won't start:** Check `docker-compose logs` for error messages
 - **Port conflicts:** Modify port mappings in `docker-compose.yml` if ports are already in use
 - **Database connection issues:** Verify DATABASE_URL environment variables match the postgres service credentials
-- **Frontend can't reach APIs:** Ensure the VM's firewall allows connections on ports 8000-8004
+- **Frontend can't reach APIs:** Ensure the VM's firewall allows connections on ports 8000-8005
+
+#### Automatic ASR (Video Transcription)
+
+- The `video` service can automatically transcribe uploaded videos using `faster-whisper`.
+- It is enabled in `docker-compose.yml` with:
+  - `ASR_ENABLED=true`
+  - `ASR_MODEL_SIZE=tiny`
+  - `ASR_COMPUTE_TYPE=int8`
+- The Docker build installs ASR dependencies only when `INSTALL_ASR_DEPS=1` is set (already configured for `video` service).
 
 Main class: `src/video_crud_service/main.py`, `src/admin_service/main.py`, etc.
 
@@ -112,4 +123,3 @@ Known Bugs:
 - After pulling new code, prefer `docker compose up -d --build` so latest code is applied.
 
 ### Impressions
-

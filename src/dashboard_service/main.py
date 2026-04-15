@@ -1,14 +1,16 @@
 import logging
 import os
+import re
 from datetime import datetime, timezone
 
 import httpx
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.video_crud_service.database import SessionLocal, init_db
-from src.video_crud_service.models import Video
+from src.video_crud_service.models import Video, VideoTranscript
 from src.video_crud_service.videos import serialize_video
 from src.communication_service.models import Notification
 from src.dashboard_service.models import SearchHistory, WatchHistory, Subscription
@@ -16,6 +18,7 @@ from src.dashboard_service.models import SearchHistory, WatchHistory, Subscripti
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 COMMUNICATION_API_BASE_URL = os.getenv("COMMUNICATION_API_BASE_URL", "").strip().rstrip("/")
+INTELLIGENCE_API_BASE_URL = os.getenv("INTELLIGENCE_API_BASE_URL", "").strip().rstrip("/")
 
 app = FastAPI(title="Dashboard Service")
 
@@ -85,6 +88,89 @@ async def _send_subscription_notifications(subscriber_user_id: str, channel_user
         )
 
 
+class SummarizeRequest(BaseModel):
+    video_id: str = Field(..., min_length=1)
+    subtitle_text: str | None = Field(default=None, min_length=1, max_length=20000)
+    max_sentences: int = Field(default=3, ge=1, le=5)
+
+
+def _clip_text(value: str, max_length: int) -> str:
+    compact = " ".join(value.strip().split())
+    if len(compact) <= max_length:
+        return compact
+    return f"{compact[: max_length - 3].rstrip()}..."
+
+
+def _build_summary_source_text(
+    *,
+    db: Session,
+    video: Video,
+    subtitle_text: str | None,
+) -> tuple[str, str]:
+    if subtitle_text and subtitle_text.strip():
+        return subtitle_text.strip(), "subtitle_text"
+
+    transcript_row = db.query(VideoTranscript).filter(VideoTranscript.video_id == video.id).first()
+    if transcript_row and transcript_row.transcript_text and transcript_row.transcript_text.strip():
+        return transcript_row.transcript_text.strip(), "subtitle_text"
+
+    tags = ", ".join([tag.strip() for tag in (video.tags or "").split(",") if tag.strip()])
+    metadata_text = (
+        f"Title: {video.title}. "
+        f"Description: {video.description or 'No description provided.'}. "
+        f"Category: {video.category or 'General'}. "
+        f"Tags: {tags or 'none'}."
+    )
+    return metadata_text, "video_metadata"
+
+
+def _summarize_mvp(source_text: str, max_sentences: int) -> str:
+    normalized = " ".join(source_text.split())
+    sentence_candidates = [s.strip() for s in re.split(r"(?<=[.!?])\s+", normalized) if s.strip()]
+    chosen = sentence_candidates[:max_sentences]
+
+    if not chosen:
+        chosen = [_clip_text(normalized, 220)]
+
+    summary = " ".join(chosen)
+    return _clip_text(summary, 500)
+
+
+async def _proxy_ai_health() -> dict | None:
+    if not INTELLIGENCE_API_BASE_URL:
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(f"{INTELLIGENCE_API_BASE_URL}/ai/health")
+            response.raise_for_status()
+            payload = response.json()
+            payload["provider"] = "intelligence_service"
+            return payload
+    except Exception:
+        logger.exception("Failed to fetch AI health from intelligence service")
+        return None
+
+
+async def _proxy_ai_summarize(payload: dict) -> dict | None:
+    if not INTELLIGENCE_API_BASE_URL:
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(
+                f"{INTELLIGENCE_API_BASE_URL}/ai/summarize",
+                json=payload,
+            )
+            response.raise_for_status()
+            result = response.json()
+            result["provider"] = "intelligence_service"
+            return result
+    except Exception:
+        logger.exception("Failed to proxy AI summarize to intelligence service")
+        return None
+
+
 @app.on_event("startup")
 def on_startup():
     init_db()
@@ -93,6 +179,52 @@ def on_startup():
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "dashboard"}
+
+
+@app.get("/ai/health")
+async def ai_health():
+    proxied = await _proxy_ai_health()
+    if proxied:
+        return proxied
+
+    return {
+        "status": "ok",
+        "service": "ai-intelligence-mvp",
+        "provider": "dashboard_fallback",
+    }
+
+
+@app.post("/ai/summarize")
+async def ai_summarize(payload: SummarizeRequest, db: Session = Depends(get_db)):
+    video = db.query(Video).filter(Video.id == payload.video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    source_text, source_kind = _build_summary_source_text(
+        db=db,
+        video=video,
+        subtitle_text=payload.subtitle_text,
+    )
+    proxied = await _proxy_ai_summarize(
+        {
+            "video_id": video.id,
+            "source_text": source_text,
+            "source_kind": source_kind,
+            "max_sentences": payload.max_sentences,
+        }
+    )
+    if proxied:
+        return proxied
+
+    summary = _summarize_mvp(source_text, payload.max_sentences)
+
+    return {
+        "video_id": video.id,
+        "summary": summary,
+        "source_kind": source_kind,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "provider": "dashboard_fallback",
+    }
 
 
 @app.get("/search")

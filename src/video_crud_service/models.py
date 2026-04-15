@@ -22,3 +22,16 @@ class Video(Base):
     likes = Column(Integer, nullable=False, default=0)
     duration_seconds = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class VideoTranscript(Base):
+    __tablename__ = "video_transcripts"
+
+    video_id = Column(String, primary_key=True, index=True)
+    transcript_text = Column(String, nullable=False, default="")
+    source = Column(String, nullable=False, default="asr")
+    status = Column(String, nullable=False, default="queued")
+    error_message = Column(String, nullable=True)
+    language = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
