@@ -16,6 +16,6 @@ export default defineConfig({
     },
   },
   server: {
-    allowedHosts: ['vcm-52418.vm.duke.edu', 'localhost', '127.0.0.1'],
+    allowedHosts: ['vcm-52418.vm.duke.edu', 'vcm-52527.vm.duke.edu', 'localhost', '127.0.0.1'],
   },
 })
