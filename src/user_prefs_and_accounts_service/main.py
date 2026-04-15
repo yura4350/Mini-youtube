@@ -322,6 +322,15 @@ def get_user(user_id:int, current_user:User = Depends(get_current_active_user), 
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Owner always sees their own profile
+    if current_user.id == user_id:
+        return user
+    
+    prefs = (db.query(UserPreferences).filter(UserPreferences.user_id == user_id).first())
+
+    if prefs is not None and prefs.privacy == "private":
+        raise HTTPException(status_code=404, detail="User is private")
 
     return user
 
