@@ -53,3 +53,29 @@ class VideoSummary(Base):
     generated_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class VideoTag(Base):
+    __tablename__ = "video_tags"
+
+    video_id = Column(String, primary_key=True, index=True)
+    tag = Column(String, primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TagTaxonomy(Base):
+    __tablename__ = "tag_taxonomy"
+
+    canonical_tag = Column(String, primary_key=True)
+    display_name = Column(String, nullable=False)
+    category = Column(String, nullable=False, default="general")
+    active = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TagAlias(Base):
+    __tablename__ = "tag_aliases"
+
+    alias = Column(String, primary_key=True)
+    canonical_tag = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
