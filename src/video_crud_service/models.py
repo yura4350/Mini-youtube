@@ -35,3 +35,21 @@ class VideoTranscript(Base):
     language = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class VideoSummary(Base):
+    __tablename__ = "video_summaries"
+
+    video_id = Column(String, primary_key=True, index=True)
+    status = Column(String, nullable=False, default="queued")
+    summary = Column(String, nullable=True)
+    source_kind = Column(String, nullable=False, default="video_metadata")
+    provider = Column(String, nullable=True)
+    error_message = Column(String, nullable=True)
+    input_hash = Column(String, nullable=True)
+    max_sentences = Column(Integer, nullable=False, default=3)
+    retry_count = Column(Integer, nullable=False, default=0)
+    duration_ms = Column(Integer, nullable=True)
+    generated_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

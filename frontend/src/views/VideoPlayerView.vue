@@ -7,7 +7,7 @@ import { formatViews } from '@/services/video-format'
 import { fetchVideoById, fetchVideoTranscript, fetchVideos, updateVideo, deleteVideo } from '@/services/videos'
 import { toApiUploaderId } from '@/services/user-id'
 import { recordWatchEvent, fetchSubscribedChannelIds, subscribeToChannel, unsubscribeFromChannel } from '@/services/dashboard'
-import { summarizeVideo } from '@/services/intelligence'
+import { summarizeVideo, fetchAiSummaryStatus, retryAiSummary } from '@/services/intelligence'
 import { useAuthStore } from '@/stores/auth'
 import type { VideoItem } from '@/types/video'
 
@@ -31,6 +31,10 @@ const aiSummarySource = ref('')
 const aiSummaryGeneratedAt = ref('')
 const aiSummaryLoading = ref(false)
 const aiSummaryError = ref('')
+const aiSummaryStatus = ref<'idle' | 'pending' | 'queued' | 'processing' | 'ready' | 'failed'>('idle')
+const aiSummaryCached = ref(false)
+const aiSummaryProvider = ref('')
+const aiSummaryRetryCount = ref(0)
 const transcriptText = ref('')
 const transcriptStatus = ref<'idle' | 'pending' | 'queued' | 'processing' | 'ready' | 'failed'>('idle')
 const transcriptLoading = ref(false)
@@ -370,14 +374,60 @@ async function generateAiSummary() {
 
   aiSummaryLoading.value = true
   aiSummaryError.value = ''
+  aiSummaryStatus.value = 'queued'
 
   try {
-    const result = await summarizeVideo({ videoId: currentVideo.value.id, maxSentences: 3 })
-    aiSummary.value = result.summary
-    aiSummarySource.value = result.source_kind
-    aiSummaryGeneratedAt.value = result.generated_at
+    let result = await summarizeVideo({ videoId: currentVideo.value.id, maxSentences: 3 })
+    aiSummaryStatus.value = result.status
+    aiSummaryCached.value = result.cached
+    aiSummaryProvider.value = result.provider || ''
+    aiSummaryRetryCount.value = result.retry_count || 0
+
+    for (let i = 0; i < 25 && (result.status === 'queued' || result.status === 'processing'); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 600))
+      result = await fetchAiSummaryStatus(currentVideo.value.id)
+      aiSummaryStatus.value = result.status
+      aiSummaryCached.value = result.cached
+      aiSummaryProvider.value = result.provider || ''
+      aiSummaryRetryCount.value = result.retry_count || 0
+    }
+
+    if (result.status === 'failed') {
+      aiSummary.value = ''
+      aiSummarySource.value = ''
+      aiSummaryGeneratedAt.value = ''
+      aiSummaryError.value = result.error_message || 'AI summary job failed.'
+      return
+    }
+
+    if (result.status === 'ready' && result.summary) {
+      aiSummary.value = result.summary
+      aiSummarySource.value = result.source_kind || ''
+      aiSummaryGeneratedAt.value = result.generated_at || ''
+      return
+    }
+
+    aiSummaryError.value = 'AI summary is still processing. Try again in a moment.'
   } catch (error) {
     aiSummaryError.value = error instanceof Error ? error.message : 'Failed to generate AI summary.'
+  } finally {
+    aiSummaryLoading.value = false
+  }
+}
+
+async function retryAiSummaryJob() {
+  if (!currentVideo.value) return
+  aiSummaryLoading.value = true
+  aiSummaryError.value = ''
+  aiSummaryStatus.value = 'queued'
+  aiSummary.value = ''
+  aiSummarySource.value = ''
+  aiSummaryGeneratedAt.value = ''
+  try {
+    await retryAiSummary(currentVideo.value.id, 3)
+    await generateAiSummary()
+  } catch (error) {
+    aiSummaryError.value = error instanceof Error ? error.message : 'Failed to retry AI summary.'
   } finally {
     aiSummaryLoading.value = false
   }
@@ -419,6 +469,10 @@ watch(
     aiSummarySource.value = ''
     aiSummaryGeneratedAt.value = ''
     aiSummaryError.value = ''
+    aiSummaryStatus.value = 'idle'
+    aiSummaryCached.value = false
+    aiSummaryProvider.value = ''
+    aiSummaryRetryCount.value = 0
     transcriptText.value = ''
     transcriptStatus.value = 'idle'
     transcriptError.value = ''
@@ -496,7 +550,10 @@ watch(
       <p v-if="aiSummaryError" class="subscribe-error">{{ aiSummaryError }}</p>
       <p v-if="transcriptError" class="subscribe-error">{{ transcriptError }}</p>
 
-      <section v-if="aiSummaryLoading || aiSummary" class="ai-summary-card">
+      <section
+        v-if="aiSummaryLoading || aiSummary || aiSummaryStatus === 'queued' || aiSummaryStatus === 'processing' || aiSummaryStatus === 'failed'"
+        class="ai-summary-card"
+      >
         <header class="ai-summary-head">
           <h2><AppIcon name="search" :size="14" /> AI Summary</h2>
           <div class="ai-summary-meta" v-if="aiSummary">
@@ -504,10 +561,26 @@ watch(
             <small class="ai-time">{{ new Date(aiSummaryGeneratedAt).toLocaleString() }}</small>
           </div>
         </header>
-        <p v-if="aiSummaryLoading && !aiSummary" class="ai-summary-placeholder">
+        <p v-if="aiSummaryLoading || aiSummaryStatus === 'queued' || aiSummaryStatus === 'processing'" class="ai-summary-placeholder">
           Crafting a concise summary...
         </p>
+        <p v-else-if="aiSummaryStatus === 'failed'" class="transcript-failed">
+          AI summary failed. {{ aiSummaryError || 'Please retry.' }}
+        </p>
         <p v-else class="ai-summary-text">{{ aiSummary }}</p>
+        <small v-if="aiSummary" class="ai-time">
+          <span v-if="aiSummaryCached">Cached</span>
+          <span v-if="aiSummaryProvider"> • {{ aiSummaryProvider }}</span>
+          <span> • Retries: {{ aiSummaryRetryCount }}</span>
+        </small>
+        <button
+          v-if="aiSummaryStatus === 'failed'"
+          class="transcript-refresh"
+          :disabled="aiSummaryLoading"
+          @click="retryAiSummaryJob"
+        >
+          {{ aiSummaryLoading ? 'Retrying...' : 'Retry Summary' }}
+        </button>
       </section>
 
       <section v-if="transcriptExpanded" class="transcript-card">

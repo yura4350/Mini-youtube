@@ -1,16 +1,19 @@
 import logging
 import os
 import re
+import hashlib
+import time
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker
 
 from src.video_crud_service.database import SessionLocal, init_db
-from src.video_crud_service.models import Video, VideoTranscript
+from src.video_crud_service.models import Video, VideoTranscript, VideoSummary
 from src.video_crud_service.videos import serialize_video
 from src.communication_service.models import Notification
 from src.dashboard_service.models import SearchHistory, WatchHistory, Subscription
@@ -19,6 +22,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 COMMUNICATION_API_BASE_URL = os.getenv("COMMUNICATION_API_BASE_URL", "").strip().rstrip("/")
 INTELLIGENCE_API_BASE_URL = os.getenv("INTELLIGENCE_API_BASE_URL", "").strip().rstrip("/")
+SUMMARY_WAIT_TRANSCRIPT_SECONDS = int(os.getenv("SUMMARY_WAIT_TRANSCRIPT_SECONDS", "12"))
+SUMMARY_WAIT_TRANSCRIPT_POLL_SECONDS = float(os.getenv("SUMMARY_WAIT_TRANSCRIPT_POLL_SECONDS", "1.0"))
 
 app = FastAPI(title="Dashboard Service")
 
@@ -92,6 +97,7 @@ class SummarizeRequest(BaseModel):
     video_id: str = Field(..., min_length=1)
     subtitle_text: str | None = Field(default=None, min_length=1, max_length=20000)
     max_sentences: int = Field(default=3, ge=1, le=5)
+    force_refresh: bool = Field(default=False)
 
 
 def _clip_text(value: str, max_length: int) -> str:
@@ -111,7 +117,10 @@ def _build_summary_source_text(
         return subtitle_text.strip(), "subtitle_text"
 
     transcript_row = db.query(VideoTranscript).filter(VideoTranscript.video_id == video.id).first()
-    if transcript_row and transcript_row.transcript_text and transcript_row.transcript_text.strip():
+    transcript_ready = transcript_row and (
+        not getattr(transcript_row, "status", None) or getattr(transcript_row, "status", "ready") == "ready"
+    )
+    if transcript_ready and transcript_row and transcript_row.transcript_text and transcript_row.transcript_text.strip():
         return transcript_row.transcript_text.strip(), "subtitle_text"
 
     tags = ", ".join([tag.strip() for tag in (video.tags or "").split(",") if tag.strip()])
@@ -134,6 +143,78 @@ def _summarize_mvp(source_text: str, max_sentences: int) -> str:
 
     summary = " ".join(chosen)
     return _clip_text(summary, 500)
+
+
+def _summary_input_hash(source_text: str, source_kind: str, max_sentences: int) -> str:
+    material = f"{source_kind}|{max_sentences}|{source_text}".encode("utf-8")
+    return hashlib.sha256(material).hexdigest()
+
+
+def _serialize_summary_row(row: VideoSummary, *, cached: bool = False) -> dict:
+    return {
+        "video_id": row.video_id,
+        "status": row.status,
+        "summary": row.summary,
+        "source_kind": row.source_kind,
+        "generated_at": row.generated_at.isoformat() if row.generated_at else None,
+        "provider": row.provider,
+        "error_message": row.error_message,
+        "cached": cached,
+        "retry_count": row.retry_count,
+        "duration_ms": row.duration_ms,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+def _upsert_summary_job(
+    db: Session,
+    *,
+    video_id: str,
+    status: str,
+    source_kind: str,
+    max_sentences: int,
+    input_hash: str,
+    summary: str | None = None,
+    provider: str | None = None,
+    error_message: str | None = None,
+    duration_ms: int | None = None,
+    bump_retry: bool = False,
+) -> VideoSummary:
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    row = db.query(VideoSummary).filter(VideoSummary.video_id == video_id).first()
+    if row:
+        row.status = status
+        row.source_kind = source_kind
+        row.max_sentences = max_sentences
+        row.input_hash = input_hash
+        row.summary = summary
+        row.provider = provider
+        row.error_message = error_message
+        row.duration_ms = duration_ms
+        row.generated_at = now if status == "ready" else row.generated_at
+        row.updated_at = now
+        if bump_retry:
+            row.retry_count = (row.retry_count or 0) + 1
+    else:
+        row = VideoSummary(
+            video_id=video_id,
+            status=status,
+            summary=summary,
+            source_kind=source_kind,
+            provider=provider,
+            error_message=error_message,
+            input_hash=input_hash,
+            max_sentences=max_sentences,
+            retry_count=1 if bump_retry else 0,
+            duration_ms=duration_ms,
+            generated_at=now if status == "ready" else None,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 async def _proxy_ai_health() -> dict | None:
@@ -171,6 +252,141 @@ async def _proxy_ai_summarize(payload: dict) -> dict | None:
         return None
 
 
+def _proxy_ai_summarize_sync(payload: dict) -> dict | None:
+    if not INTELLIGENCE_API_BASE_URL:
+        return None
+
+    try:
+        with httpx.Client(timeout=8.0) as client:
+            response = client.post(
+                f"{INTELLIGENCE_API_BASE_URL}/ai/summarize",
+                json=payload,
+            )
+            response.raise_for_status()
+            result = response.json()
+            result["provider"] = "intelligence_service"
+            return result
+    except Exception:
+        logger.exception("Failed to proxy AI summarize synchronously to intelligence service")
+        return None
+
+
+def _run_summary_job(
+    *,
+    db_bind,
+    video_id: str,
+    source_text: str,
+    source_kind: str,
+    max_sentences: int,
+    input_hash: str,
+) -> None:
+    session_factory = sessionmaker(bind=db_bind, autocommit=False, autoflush=False)
+    db = session_factory()
+    started = time.perf_counter()
+    try:
+        _upsert_summary_job(
+            db,
+            video_id=video_id,
+            status="processing",
+            source_kind=source_kind,
+            max_sentences=max_sentences,
+            input_hash=input_hash,
+            summary=None,
+            provider=None,
+            error_message=None,
+            duration_ms=None,
+        )
+
+        if source_kind == "video_metadata":
+            deadline = time.time() + max(0, SUMMARY_WAIT_TRANSCRIPT_SECONDS)
+            while time.time() < deadline:
+                transcript_row = (
+                    db.query(VideoTranscript)
+                    .filter(VideoTranscript.video_id == video_id)
+                    .first()
+                )
+                if not transcript_row:
+                    break
+                transcript_status = (transcript_row.status or "").strip().lower()
+                if transcript_status == "ready" and (transcript_row.transcript_text or "").strip():
+                    source_text = transcript_row.transcript_text.strip()
+                    source_kind = "subtitle_text"
+                    input_hash = _summary_input_hash(source_text, source_kind, max_sentences)
+                    break
+                if transcript_status == "failed":
+                    break
+                if transcript_status in {"queued", "processing", "pending", ""}:
+                    time.sleep(max(0.1, SUMMARY_WAIT_TRANSCRIPT_POLL_SECONDS))
+                    continue
+                break
+
+        proxied = _proxy_ai_summarize_sync(
+            {
+                "video_id": video_id,
+                "source_text": source_text,
+                "source_kind": source_kind,
+                "max_sentences": max_sentences,
+            }
+        )
+        if proxied and proxied.get("summary"):
+            summary = _clip_text(str(proxied["summary"]), 500)
+            provider = str(proxied.get("provider") or "intelligence_service")
+        else:
+            summary = _summarize_mvp(source_text, max_sentences)
+            provider = "dashboard_fallback"
+
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        row = _upsert_summary_job(
+            db,
+            video_id=video_id,
+            status="ready",
+            source_kind=source_kind,
+            max_sentences=max_sentences,
+            input_hash=input_hash,
+            summary=summary,
+            provider=provider,
+            error_message=None,
+            duration_ms=duration_ms,
+        )
+        logger.info(
+            "ai_summary_ready video_id=%s status=%s source_kind=%s provider=%s chars=%s duration_ms=%s retries=%s",
+            row.video_id,
+            row.status,
+            row.source_kind,
+            row.provider,
+            len(row.summary or ""),
+            row.duration_ms,
+            row.retry_count,
+        )
+    except Exception as exc:
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        try:
+            row = _upsert_summary_job(
+                db,
+                video_id=video_id,
+                status="failed",
+                source_kind=source_kind,
+                max_sentences=max_sentences,
+                input_hash=input_hash,
+                summary=None,
+                provider=None,
+                error_message=str(exc)[:500],
+                duration_ms=duration_ms,
+            )
+            logger.error(
+                "ai_summary_failed video_id=%s status=%s source_kind=%s duration_ms=%s error=%s",
+                row.video_id,
+                row.status,
+                row.source_kind,
+                row.duration_ms,
+                row.error_message,
+            )
+        except Exception:
+            logger.exception("Failed to persist failed ai summary state video_id=%s", video_id)
+    finally:
+        db.close()
+
+
 @app.on_event("startup")
 def on_startup():
     init_db()
@@ -194,8 +410,36 @@ async def ai_health():
     }
 
 
+@app.get("/ai/summarize/{video_id}")
+def ai_summarize_status(video_id: str, db: Session = Depends(get_db)):
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    row = db.query(VideoSummary).filter(VideoSummary.video_id == video_id).first()
+    if not row:
+        return {
+            "video_id": video_id,
+            "status": "pending",
+            "summary": None,
+            "source_kind": None,
+            "generated_at": None,
+            "provider": None,
+            "error_message": None,
+            "cached": False,
+            "retry_count": 0,
+            "duration_ms": None,
+            "updated_at": None,
+        }
+    return _serialize_summary_row(row, cached=False)
+
+
 @app.post("/ai/summarize")
-async def ai_summarize(payload: SummarizeRequest, db: Session = Depends(get_db)):
+async def ai_summarize(
+    payload: SummarizeRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     video = db.query(Video).filter(Video.id == payload.video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -205,26 +449,53 @@ async def ai_summarize(payload: SummarizeRequest, db: Session = Depends(get_db))
         video=video,
         subtitle_text=payload.subtitle_text,
     )
-    proxied = await _proxy_ai_summarize(
-        {
-            "video_id": video.id,
-            "source_text": source_text,
-            "source_kind": source_kind,
-            "max_sentences": payload.max_sentences,
-        }
+    input_hash = _summary_input_hash(source_text, source_kind, payload.max_sentences)
+    row = db.query(VideoSummary).filter(VideoSummary.video_id == video.id).first()
+    if row and row.input_hash == input_hash and not payload.force_refresh:
+        if row.status == "ready":
+            return _serialize_summary_row(row, cached=True)
+        if row.status in {"queued", "processing"}:
+            return _serialize_summary_row(row, cached=False)
+
+    queued = _upsert_summary_job(
+        db,
+        video_id=video.id,
+        status="queued",
+        source_kind=source_kind,
+        max_sentences=payload.max_sentences,
+        input_hash=input_hash,
+        summary=None,
+        provider=None,
+        error_message=None,
+        duration_ms=None,
+        bump_retry=payload.force_refresh,
     )
-    if proxied:
-        return proxied
+    background_tasks.add_task(
+        _run_summary_job,
+        db_bind=db.get_bind(),
+        video_id=video.id,
+        source_text=source_text,
+        source_kind=source_kind,
+        max_sentences=payload.max_sentences,
+        input_hash=input_hash,
+    )
+    return _serialize_summary_row(queued, cached=False)
 
-    summary = _summarize_mvp(source_text, payload.max_sentences)
 
-    return {
-        "video_id": video.id,
-        "summary": summary,
-        "source_kind": source_kind,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "provider": "dashboard_fallback",
-    }
+@app.post("/ai/summarize/{video_id}/retry")
+async def ai_summarize_retry(
+    video_id: str,
+    background_tasks: BackgroundTasks,
+    max_sentences: int = Query(3, ge=1, le=5),
+    db: Session = Depends(get_db),
+):
+    payload = SummarizeRequest(
+        video_id=video_id,
+        subtitle_text=None,
+        max_sentences=max_sentences,
+        force_refresh=True,
+    )
+    return await ai_summarize(payload=payload, background_tasks=background_tasks, db=db)
 
 
 @app.get("/search")

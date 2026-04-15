@@ -112,11 +112,19 @@ def create_test_watch_history(db, user_id="user1", video_id="video1", position_s
     return watch
 
 
-def create_test_transcript(db, video_id: str, transcript_text: str, source: str = "asr", language: str | None = "en"):
+def create_test_transcript(
+    db,
+    video_id: str,
+    transcript_text: str,
+    source: str = "asr",
+    language: str | None = "en",
+    status: str = "ready",
+):
     transcript = VideoTranscript(
         video_id=video_id,
         transcript_text=transcript_text,
         source=source,
+        status=status,
         language=language,
         created_at=datetime.now(timezone.utc).replace(tzinfo=None),
         updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
