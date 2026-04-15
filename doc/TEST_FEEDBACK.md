@@ -4,7 +4,15 @@
 
 ## Issues Noted (raw)
 
-#### Session 1
+#### Session 1.1
+
+* Issue #1
+
+* Issue #2
+
+* Issue #3
+
+#### Session 1.2
 
 * Issue #1
 
