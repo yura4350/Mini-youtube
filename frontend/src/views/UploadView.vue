@@ -144,8 +144,8 @@ async function onSubmit() {
 
 .upload-card {
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #1a1a1a;
+  border: 1px solid var(--border-default);
+  background: var(--bg-1);
   padding: 20px;
 }
 
@@ -153,12 +153,12 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #fff;
+  color: var(--text-main);
   font-size: 28px;
 }
 
 .sub {
-  color: #9ca3af;
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
@@ -171,16 +171,16 @@ h1 {
 label {
   display: grid;
   gap: 6px;
-  color: #e8eaef;
+  color: var(--text-body);
   font-size: 14px;
 }
 
 input,
 textarea,
 select {
-  background: #0f0f0f;
-  border: 1px solid rgba(255, 255, 255, 0.17);
-  color: #fff;
+  background: var(--bg-0);
+  border: 1px solid var(--border-medium);
+  color: var(--text-main);
   border-radius: 10px;
   padding: 10px 12px;
 }
@@ -194,8 +194,8 @@ button {
   border: none;
   border-radius: 10px;
   padding: 11px 14px;
-  color: #fff;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
   font-weight: 600;
 }
 
@@ -209,6 +209,6 @@ button {
 
 .error {
   margin-top: 12px;
-  color: #ff9f8b;
+  color: var(--accent-text-mid);
 }
 </style>

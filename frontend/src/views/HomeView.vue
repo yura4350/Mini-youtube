@@ -148,9 +148,9 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: #1a1a1a;
-  color: #d2d6df;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-1);
+  color: var(--text-subtle);
   border-radius: 999px;
   padding: 8px 12px;
   white-space: nowrap;
@@ -158,27 +158,27 @@ onMounted(() => {
 }
 
 .filter-chip {
-  color: #f2f4f8;
+  color: var(--text-main);
 }
 
 .chip.active {
-  color: #fff;
-  border-color: rgba(239, 68, 68, 0.75);
+  color: var(--text-main);
+  border-color: var(--accent-outline-soft);
   background: rgba(220, 38, 38, 0.22);
 }
 
 .filter-panel {
   margin-top: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--border-medium);
   border-radius: 14px;
-  background: #141414;
+  background: var(--bg-2);
   padding: 12px;
   display: grid;
   gap: 12px;
 }
 
 .filter-block p {
-  color: #f2f4f8;
+  color: var(--text-main);
   font-size: 13px;
   margin-bottom: 6px;
 }
@@ -190,9 +190,9 @@ onMounted(() => {
 }
 
 .mini-chip {
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #1a1a1a;
-  color: #d2d6df;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-1);
+  color: var(--text-subtle);
   border-radius: 999px;
   padding: 6px 10px;
   font-size: 13px;
@@ -200,16 +200,16 @@ onMounted(() => {
 }
 
 .mini-chip.active {
-  color: #fff;
-  border-color: rgba(239, 68, 68, 0.75);
+  color: var(--text-main);
+  border-color: var(--accent-outline-soft);
   background: rgba(220, 38, 38, 0.22);
 }
 
 .reset-btn {
   justify-self: start;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-strong);
   background: transparent;
-  color: #fff;
+  color: var(--text-main);
   border-radius: 9px;
   padding: 7px 11px;
   cursor: pointer;
@@ -224,10 +224,10 @@ onMounted(() => {
 
 .status-box {
   margin-top: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-default);
   border-radius: 12px;
-  background: #1a1a1a;
-  color: #d9dde5;
+  background: var(--bg-1);
+  color: var(--text-subtle);
   padding: 14px;
 }
 
@@ -239,9 +239,9 @@ onMounted(() => {
 }
 
 .retry-btn {
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-strong);
   background: transparent;
-  color: #fff;
+  color: var(--text-main);
   border-radius: 8px;
   padding: 7px 10px;
   cursor: pointer;

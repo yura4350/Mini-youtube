@@ -3,9 +3,11 @@ import { computed, onMounted, reactive, ref, watchEffect } from 'vue'
 import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
+import { authService, applyDocumentUiTheme } from '@/services/auth'
 import { fetchVideos } from '@/services/videos'
 import { fetchSubscriptionsFeed } from '@/services/dashboard'
 import type { VideoItem } from '@/types/video'
+import type { UserPreferencesDTO } from '@/types/auth'
 
 const authStore = useAuthStore()
 const tab = ref<'videos' | 'subscriptions'>('videos')
@@ -26,6 +28,18 @@ const form = reactive({
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const avatarUploading = ref(false)
 const avatarCacheBust = ref(0)
+
+const prefsLoading = ref(false)
+const prefsSavingPrivacy = ref(false)
+const prefsSavingNotifications = ref(false)
+const prefsSavingUi = ref(false)
+const prefsMessage = ref('')
+
+const prefs = reactive({
+  privacy: 'public' as 'public' | 'private',
+  notifications: true,
+  ui_theme: 'dark' as 'dark' | 'light',
+})
 
 function avatarDisplayUrl(): string {
   const u = authStore.currentUser?.avatar
@@ -109,9 +123,68 @@ async function saveProfile() {
   message.value = result.message
 }
 
+function applyPrefsFromServer(p: UserPreferencesDTO) {
+  prefs.privacy = p.privacy === 'private' ? 'private' : 'public'
+  prefs.notifications = p.notifications
+  prefs.ui_theme = p.ui_theme === 'light' ? 'light' : 'dark'
+  applyDocumentUiTheme(prefs.ui_theme)
+}
+
+async function loadPreferences() {
+  prefsLoading.value = true
+  prefsMessage.value = ''
+  const p = await authService.fetchUserPreferences()
+  prefsLoading.value = false
+  if (!p) {
+    prefsMessage.value = 'Could not load preferences.'
+    return
+  }
+  applyPrefsFromServer(p)
+}
+
+async function savePrivacySettings() {
+  prefsSavingPrivacy.value = true
+  prefsMessage.value = ''
+  const result = await authService.updateUserPreferences({ privacy: prefs.privacy })
+  prefsSavingPrivacy.value = false
+  if (!result.ok) {
+    prefsMessage.value = result.message
+    return
+  }
+  applyPrefsFromServer(result.preferences)
+  prefsMessage.value = 'Privacy settings saved.'
+}
+
+async function saveNotificationSettings() {
+  prefsSavingNotifications.value = true
+  prefsMessage.value = ''
+  const result = await authService.updateUserPreferences({ notifications: prefs.notifications })
+  prefsSavingNotifications.value = false
+  if (!result.ok) {
+    prefsMessage.value = result.message
+    return
+  }
+  applyPrefsFromServer(result.preferences)
+  prefsMessage.value = 'Notification preferences saved.'
+}
+
+async function saveUiSettings() {
+  prefsSavingUi.value = true
+  prefsMessage.value = ''
+  const result = await authService.updateUserPreferences({ ui_theme: prefs.ui_theme })
+  prefsSavingUi.value = false
+  if (!result.ok) {
+    prefsMessage.value = result.message
+    return
+  }
+  applyPrefsFromServer(result.preferences)
+  prefsMessage.value = 'Appearance saved.'
+}
+
 onMounted(() => {
   loadVideos()
   loadSubscriptionsFeed()
+  loadPreferences()
 })
 </script>
 
@@ -149,7 +222,10 @@ onMounted(() => {
             ><AppIcon name="users" :size="14" />
             {{ authStore.currentUser.subscribedTo.length }} subscriptions</span
           >
-          <span><AppIcon name="bell" :size="14" /> Notification inbox enabled</span>
+          <span
+            ><AppIcon name="bell" :size="14" />
+            {{ prefs.notifications ? 'Push-style alerts enabled' : 'Notifications muted in preferences' }}</span
+          >
         </div>
       </div>
     </section>
@@ -176,6 +252,75 @@ onMounted(() => {
         <div class="actions">
           <button @click="saveProfile"><AppIcon name="check" :size="14" /> Save</button>
           <button class="ghost" @click="editMode = false"><AppIcon name="logout" :size="14" /> Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="preferences">
+      <header>
+        <h2>Privacy</h2>
+        <p class="prefs-hint">Control whether your profile is visible to other signed-in users.</p>
+      </header>
+
+      <p v-if="prefsLoading" class="muted">Loading preferences…</p>
+      <div v-else class="prefs-grid">
+        <label class="prefs-field">
+          Profile visibility
+          <select v-model="prefs.privacy" class="prefs-select">
+            <option value="public">Public — others can open your profile</option>
+            <option value="private">Private — others see “User not found”</option>
+          </select>
+        </label>
+        <div class="prefs-actions">
+          <button type="button" :disabled="prefsSavingPrivacy" @click="savePrivacySettings">
+            <AppIcon name="check" :size="14" />
+            {{ prefsSavingPrivacy ? 'Saving…' : 'Save privacy' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="preferences">
+      <header>
+        <h2>Notifications</h2>
+        <p class="prefs-hint">Stored on your account; product notifications may still respect this flag as services adopt it.</p>
+      </header>
+
+      <p v-if="prefsLoading" class="muted">Loading preferences…</p>
+      <div v-else class="prefs-grid prefs-notifications">
+        <label class="toggle-row">
+          <input v-model="prefs.notifications" type="checkbox" class="prefs-checkbox" />
+          <span>Enable Notification Preferences</span>
+        </label>
+        <div class="prefs-actions">
+          <button type="button" :disabled="prefsSavingNotifications" @click="saveNotificationSettings">
+            <AppIcon name="bell" :size="14" />
+            {{ prefsSavingNotifications ? 'Saving…' : 'Save notifications' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="preferences">
+      <header>
+        <h2>Appearance</h2>
+        <p class="prefs-hint">Choose light or dark UI. This applies across the app after you save.</p>
+      </header>
+
+      <p v-if="prefsLoading" class="muted">Loading preferences…</p>
+      <div v-else class="prefs-grid">
+        <label class="prefs-field">
+          Theme
+          <select v-model="prefs.ui_theme" class="prefs-select">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
+        <div class="prefs-actions">
+          <button type="button" :disabled="prefsSavingUi" @click="saveUiSettings">
+            <AppIcon name="check" :size="14" />
+            {{ prefsSavingUi ? 'Saving…' : 'Save appearance' }}
+          </button>
         </div>
       </div>
     </section>
@@ -207,6 +352,7 @@ onMounted(() => {
     </section>
 
     <p v-if="message" class="ok">{{ message }}</p>
+    <p v-if="prefsMessage" class="ok prefs-toast">{{ prefsMessage }}</p>
   </main>
 </template>
 
@@ -219,10 +365,11 @@ onMounted(() => {
 
 .profile-header,
 .editor,
+.preferences,
 .notification-item {
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #1a1a1a;
+  border: 1px solid var(--border-default);
+  background: var(--bg-1);
 }
 
 .profile-header {
@@ -264,18 +411,18 @@ onMounted(() => {
 }
 
 h1 {
-  color: #fff;
+  color: var(--text-main);
   font-size: 28px;
 }
 
 .email,
 .bio {
-  color: #c2c8d2;
+  color: var(--text-soft);
 }
 
 .stats {
   margin-top: 8px;
-  color: #e8ebf2;
+  color: var(--text-body);
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
@@ -287,6 +434,72 @@ h1 {
   padding: 14px;
 }
 
+.preferences {
+  margin-top: 12px;
+  padding: 14px;
+}
+
+.preferences header {
+  margin-bottom: 10px;
+}
+
+.preferences h2 {
+  color: var(--text-main);
+  font-size: 18px;
+}
+
+.prefs-hint {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.prefs-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.prefs-field {
+  display: grid;
+  gap: 6px;
+  color: var(--text-body);
+  font-size: 14px;
+}
+
+.prefs-notifications .toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-body);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.prefs-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-soft);
+}
+
+.prefs-select {
+  max-width: 420px;
+  background: var(--bg-0);
+  border: 1px solid var(--border-strong);
+  color: var(--text-main);
+  border-radius: 9px;
+  padding: 9px 11px;
+}
+
+.prefs-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.prefs-toast {
+  margin-top: 8px;
+}
+
 .editor header {
   display: flex;
   justify-content: space-between;
@@ -294,7 +507,7 @@ h1 {
 }
 
 .editor h2 {
-  color: #fff;
+  color: var(--text-main);
   font-size: 18px;
 }
 
@@ -307,15 +520,15 @@ h1 {
 label {
   display: grid;
   gap: 6px;
-  color: #e9ebef;
+  color: var(--text-body);
   font-size: 14px;
 }
 
 input,
 textarea {
-  background: #0f0f0f;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: var(--bg-0);
+  border: 1px solid var(--border-strong);
+  color: var(--text-main);
   border-radius: 9px;
   padding: 9px 11px;
 }
@@ -332,13 +545,14 @@ button {
   border: none;
   border-radius: 9px;
   padding: 8px 12px;
-  color: #fff;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
 }
 
 button.ghost {
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid var(--border-heavy);
   background: transparent;
+  color: var(--text-main);
 }
 
 .tabs {
@@ -349,15 +563,15 @@ button.ghost {
 }
 
 .tabs button {
-  background: #161616;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #dadde5;
+  background: var(--bg-5);
+  border: 1px solid var(--border-medium);
+  color: var(--text-subtle);
 }
 
 .tabs button.active {
-  background: rgba(220, 38, 38, 0.2);
-  border-color: rgba(239, 68, 68, 0.75);
-  color: #fff;
+  background: var(--accent-wash-hover);
+  border-color: var(--accent-outline-soft);
+  color: var(--text-main);
 }
 
 .inbox-link {
@@ -365,17 +579,17 @@ button.ghost {
   align-items: center;
   gap: 6px;
   text-decoration: none;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--border-medium);
   border-radius: 9px;
-  color: #e5e7eb;
+  color: var(--text-body);
   padding: 8px 12px;
-  background: #161616;
+  background: var(--bg-5);
 }
 
 .inbox-link:hover {
-  border-color: rgba(239, 68, 68, 0.75);
-  background: rgba(220, 38, 38, 0.16);
-  color: #fff;
+  border-color: var(--accent-outline-soft);
+  background: var(--accent-wash);
+  color: var(--text-main);
 }
 
 .video-grid {
@@ -386,12 +600,12 @@ button.ghost {
 }
 
 .muted {
-  color: #a7adba;
+  color: var(--text-muted);
 }
 
 .ok {
   margin-top: 10px;
-  color: #a7f3be;
+  color: var(--ok-text);
 }
 
 @media (max-width: 760px) {

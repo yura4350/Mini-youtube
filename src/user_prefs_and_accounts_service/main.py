@@ -1,11 +1,11 @@
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, inspect, text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey, inspect, text
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, relationship, mapped_column
 
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
 
 from passlib.context import CryptContext # Used to help with hashing and password verification
 import jwt
@@ -33,11 +33,13 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Database Model (Our table structure)
+# Database Model
+
+# Main User Table
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = mapped_column(Integer, primary_key=True, index=True)
     name = Column(String, nullable = False)
     email = Column(String, nullable = False, unique=True)
     role = Column(String, nullable = False)
@@ -45,6 +47,21 @@ class User(Base):
     avatar = Column(String, nullable = True)
     hashed_pwd = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
+
+    preferences = relationship("UserPreferences", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+# User Preferences Table
+class UserPreferences(Base):
+    """Table to store user preferences"""
+
+    __tablename__ = "user_preferences"
+
+    user_id = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    privacy = mapped_column(String, nullable=False, default="public")
+    notifications = mapped_column(Boolean, nullable=False, default=True)
+    ui_theme = mapped_column(String, nullable=False, default="dark")
+
+    user = relationship("User", back_populates="preferences")
 
 Base.metadata.create_all(engine)
 
@@ -96,6 +113,7 @@ class UserResponse(BaseModel): # Determines what is given by a model
     avatar:Optional[str] = None
     is_active: bool
 
+    # Return data as objects instead of dictionaries
     class Config:
         from_attributes = True
 
@@ -111,6 +129,32 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None
 
+class UserPreferencesResponse(BaseModel):
+    user_id: int
+    privacy: str
+    notifications: bool
+    ui_theme: str
+
+    class Config:
+        from_attributes = True
+
+class UserPreferencesUpdate(BaseModel):
+    privacy: Optional[str] = None
+    notifications: Optional[bool] = None
+    ui_theme: Optional[str] = None
+
+# Function to return user preferences (or create them with default valuesif they don't exist)
+def _get_or_create_user_preferences(db: Session, user_id: int) -> UserPreferences:
+    user_prefs = db.query(UserPreferences).filter(UserPreferences.user_id == user_id).first()
+
+    # Create new preferences if they don't exist
+    if not user_prefs:
+        user_prefs = UserPreferences(user_id=user_id)
+        db.add(user_prefs)
+        db.commit()
+        db.refresh(user_prefs)
+
+    return user_prefs
 
 # Security Functions
 def verify_pwd(plain_pwd: str, hashed_pwd: str) -> bool:
@@ -225,7 +269,9 @@ from src.user_prefs_and_accounts_service.avatars import router as avatars_router
 
 app.include_router(avatars_router)
 
+### USER TABLE RELATED ENDPOINTS ###
 
+# Health Check Endpoint
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "user-accounts-prefs"}
@@ -303,25 +349,17 @@ def get_user(user_id:int, current_user:User = Depends(get_current_active_user), 
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Owner always sees their own profile
+    if current_user.id == user_id:
+        return user
+    
+    prefs = (db.query(UserPreferences).filter(UserPreferences.user_id == user_id).first())
+
+    if prefs is not None and prefs.privacy == "private":
+        raise HTTPException(status_code=404, detail="User is private")
 
     return user
-
-# Update any user (should be removed in the future)
-@app.put("/user/{user_id}", response_model=UserResponse)
-def update_user(user_id:int, update_user:UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.id == user_id).first()
-
-    if not db_user:
-        raise HTTPException(status_code=404, detail="User does not exist")
-    
-    db_user.name = update_user.name
-    db_user.email = update_user.email
-    db_user.role = update_user.role
-
-
-    db.commit()
-    db.refresh(db_user)
-    return db_user
 
 # Endpoint to let user update himself
 @app.put("/user/profile/edit", response_model=UserResponse)
@@ -366,6 +404,29 @@ def delete(user_id:int, current_user:User = Depends(get_current_active_user), db
 @app.get("/users/", response_model=List[UserResponse])
 def get_all_users(current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
     return db.query(User).all()
+
+### USER PREFERENCES TABLE RELATED ENDPOINTS ###
+# Get user's own preferences
+@app.get("/user/preferences", response_model=UserPreferencesResponse)
+def get_user_preferences(current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    user_prefs = _get_or_create_user_preferences(db, current_user.id)
+    return user_prefs
+
+# Update user's own preferences
+@app.patch("/user/preferences/update", response_model=UserPreferencesResponse)
+def update_user_preferences(update_prefs:UserPreferencesUpdate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    user_prefs = _get_or_create_user_preferences(db, current_user.id)
+    if update_prefs.privacy is not None:
+        user_prefs.privacy = update_prefs.privacy
+    if update_prefs.notifications is not None:
+        user_prefs.notifications = update_prefs.notifications
+    if update_prefs.ui_theme is not None:
+        user_prefs.ui_theme = update_prefs.ui_theme
+
+    db.commit()
+    db.refresh(user_prefs)
+    return user_prefs
+
 
 
 

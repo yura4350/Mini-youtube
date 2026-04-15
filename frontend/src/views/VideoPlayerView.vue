@@ -731,7 +731,7 @@ watch(
 
 h1 {
   margin-top: 14px;
-  color: #fff;
+  color: var(--text-main);
   font-size: 24px;
 }
 
@@ -739,7 +739,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #9ca3af;
+  color: var(--text-muted);
   margin-top: 4px;
 }
 
@@ -837,7 +837,7 @@ h1 {
 
 .subscribe-error {
   margin-top: 8px;
-  color: #ff9f8b;
+  color: var(--accent-text-mid);
   font-size: 14px;
 }
 
@@ -994,7 +994,7 @@ h1 {
 
 .btn-edit {
   background: #0ea5e9;
-  color: #fff;
+  color: var(--text-main);
 }
 
 .btn-edit:hover {
@@ -1003,7 +1003,7 @@ h1 {
 
 .btn-delete {
   background: #ef4444;
-  color: #fff;
+  color: var(--text-main);
 }
 
 .btn-delete:hover:not(:disabled) {
@@ -1017,21 +1017,21 @@ h1 {
 
 .edit-form {
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #1a1a1a;
+  border: 1px solid var(--border-default);
+  background: var(--bg-1);
   padding: 16px;
   margin-top: 14px;
 }
 
 .edit-form h2 {
-  color: #fff;
+  color: var(--text-main);
   margin-bottom: 12px;
   font-size: 18px;
 }
 
 .edit-form label {
   display: block;
-  color: #c6cad2;
+  color: var(--text-soft);
   margin-bottom: 10px;
   font-size: 14px;
 }
@@ -1041,10 +1041,10 @@ h1 {
 .edit-form select {
   width: 100%;
   padding: 8px 12px;
-  background: #2a2a2a;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-2a);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
-  color: #fff;
+  color: var(--text-main);
   margin-top: 4px;
   font-family: inherit;
 }
@@ -1065,7 +1065,7 @@ h1 {
 
 .btn-save {
   background: #10b981;
-  color: #fff;
+  color: var(--text-main);
   flex: 1;
 }
 
@@ -1079,8 +1079,8 @@ h1 {
 }
 
 .btn-cancel {
-  background: #6b7280;
-  color: #fff;
+  background: var(--text-faint);
+  color: var(--text-main);
   flex: 1;
 }
 
@@ -1106,8 +1106,8 @@ h1 {
 .channel-card {
   margin-top: 14px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #1a1a1a;
+  border: 1px solid var(--border-default);
+  background: var(--bg-1);
   padding: 14px;
   display: flex;
   gap: 10px;
@@ -1120,13 +1120,13 @@ h1 {
 }
 
 .name {
-  color: #fff;
+  color: var(--text-main);
   font-weight: 600;
 }
 
 .desc {
   margin-top: 4px;
-  color: #c6cad2;
+  color: var(--text-soft);
   font-size: 14px;
 }
 
@@ -1134,7 +1134,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #f4f5f8;
+  color: var(--text-main);
   font-size: 18px;
   margin-bottom: 10px;
 }
@@ -1151,8 +1151,8 @@ h1 {
 .chat-card {
   margin-top: 14px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #1a1a1a;
+  border: 1px solid var(--border-default);
+  background: var(--bg-1);
   padding: 12px;
 }
 
@@ -1164,16 +1164,16 @@ h1 {
 }
 
 .chat-header h3 {
-  color: #f4f5f8;
+  color: var(--text-main);
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
 .chat-state {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
   padding: 2px 8px;
 }
@@ -1188,13 +1188,13 @@ h1 {
   height: 260px;
   overflow-y: auto;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: #111;
+  border: 1px solid var(--border-faint);
+  background: var(--bg-9);
   padding: 10px;
 }
 
 .chat-empty {
-  color: #8f97a4;
+  color: var(--text-muted);
   text-align: center;
   margin-top: 100px;
 }
@@ -1204,7 +1204,7 @@ h1 {
 }
 
 .chat-row.system .chat-meta strong {
-  color: #fda4af;
+  color: var(--accent-text-soft);
 }
 
 .chat-meta {
@@ -1215,17 +1215,17 @@ h1 {
 }
 
 .chat-meta strong {
-  color: #fff;
+  color: var(--text-main);
   font-size: 13px;
 }
 
 .chat-meta small {
-  color: #8f97a4;
+  color: var(--text-muted);
   font-size: 11px;
 }
 
 .chat-text {
-  color: #d5dae3;
+  color: var(--text-subtle);
   margin-top: 2px;
   line-height: 1.45;
   font-size: 14px;
@@ -1242,17 +1242,17 @@ h1 {
 
 .chat-form input {
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: #121212;
-  color: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-3);
+  color: var(--text-main);
   padding: 9px 12px;
 }
 
 .chat-form button {
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid var(--border-heavy);
   background: rgba(220, 38, 38, 0.92);
-  color: #fff;
+  color: var(--text-main);
   padding: 8px 12px;
   display: inline-flex;
   align-items: center;

@@ -440,9 +440,9 @@ onUnmounted(() => {
 
 .admin-card,
 .metric {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-default);
   border-radius: 14px;
-  background: #1a1a1a;
+  background: var(--bg-1);
   padding: 16px;
 }
 
@@ -454,11 +454,11 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #fff;
+  color: var(--text-main);
 }
 
 .admin-card p {
-  color: #a8aeba;
+  color: var(--text-muted);
 }
 
 .admin-grid {
@@ -468,7 +468,7 @@ onUnmounted(() => {
 }
 
 .metric--api {
-  background: #111;
+  background: var(--bg-9);
   border-color: rgba(59, 130, 246, 0.2);
 }
 
@@ -480,12 +480,12 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .value {
-  color: #fff;
+  color: var(--text-main);
   font-size: 28px;
   font-weight: 700;
 }
@@ -498,8 +498,8 @@ onUnmounted(() => {
 }
 
 .action-card {
-  background: #141414;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-2);
+  border: 1px solid var(--border-default);
   border-radius: 14px;
   padding: 16px;
   display: grid;
@@ -507,7 +507,7 @@ onUnmounted(() => {
 }
 
 .action-desc {
-  color: #6b7280;
+  color: var(--text-faint);
   font-size: 13px;
   margin: 0;
 }
@@ -519,10 +519,10 @@ onUnmounted(() => {
 }
 
 .action-input {
-  background: #0f0f0f;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--bg-0);
+  border: 1px solid var(--border-medium);
   border-radius: 8px;
-  color: #f2f4f8;
+  color: var(--text-main);
   padding: 8px 12px;
   font-size: 13px;
   min-width: 0;
@@ -530,16 +530,16 @@ onUnmounted(() => {
 
 .action-input:focus {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.35);
+  border-color: var(--border-extra);
 }
 
 .action-btn--danger {
-  border-color: rgba(239, 68, 68, 0.5);
-  color: #fca5a5;
+  border-color: var(--accent-outline);
+  color: var(--accent-text-soft);
 }
 
 .action-btn--danger:not(:disabled):hover {
-  background: rgba(220, 38, 38, 0.2);
+  background: var(--accent-wash-hover);
 }
 
 .action-result {
@@ -550,21 +550,21 @@ onUnmounted(() => {
 }
 
 .result--ok {
-  color: #86efac;
+  color: var(--ok-text-strong);
   background: rgba(34, 197, 94, 0.1);
   border: 1px solid rgba(34, 197, 94, 0.25);
 }
 
 .result--err {
-  color: #fca5a5;
+  color: var(--accent-text-soft);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 /* Logs section */
 .logs-section {
-  background: #0f0f0f;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-0);
+  border: 1px solid var(--border-default);
   border-radius: 14px;
   padding: 18px;
   display: grid;
@@ -582,7 +582,7 @@ onUnmounted(() => {
 .section-title {
   font-size: 15px;
   font-weight: 600;
-  color: #f2f4f8;
+  color: var(--text-main);
   margin: 0;
 }
 
@@ -595,9 +595,9 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: #1a1a1a;
-  color: #d4d7de;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-1);
+  color: var(--text-subtle);
   border-radius: 8px;
   padding: 7px 12px;
   font-size: 13px;
@@ -610,9 +610,9 @@ onUnmounted(() => {
 }
 
 .action-btn--active {
-  border-color: rgba(239, 68, 68, 0.7);
-  background: rgba(220, 38, 38, 0.18);
-  color: #fca5a5;
+  border-color: var(--accent-outline-soft);
+  background: var(--accent-wash-hover);
+  color: var(--accent-text-soft);
 }
 
 /* Level filter chips */
@@ -623,9 +623,9 @@ onUnmounted(() => {
 }
 
 .chip {
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #1a1a1a;
-  color: #d2d6df;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-1);
+  color: var(--text-subtle);
   border-radius: 999px;
   padding: 5px 12px;
   font-size: 12px;
@@ -634,14 +634,14 @@ onUnmounted(() => {
 }
 
 .chip.active {
-  color: #fff;
+  color: var(--text-main);
 }
 .chip--all.active {
-  border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-extra);
+  background: var(--border-faint);
 }
 .chip--debug.active {
-  border-color: #6b7280;
+  border-color: var(--text-faint);
   background: rgba(107, 114, 128, 0.2);
 }
 .chip--info.active {
@@ -665,7 +665,7 @@ onUnmounted(() => {
 .log-table-wrapper {
   overflow-x: auto;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-faint);
 }
 
 .log-table {
@@ -675,15 +675,15 @@ onUnmounted(() => {
 }
 
 .log-table thead th {
-  background: #1a1a1a;
-  color: #9ca3af;
+  background: var(--bg-1);
+  color: var(--text-muted);
   font-weight: 600;
   text-align: left;
   padding: 10px 12px;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-faint);
   white-space: nowrap;
 }
 
@@ -700,13 +700,13 @@ onUnmounted(() => {
 
 .log-table td {
   padding: 9px 12px;
-  color: #d4d7de;
+  color: var(--text-subtle);
   vertical-align: top;
 }
 
 .col-time {
   white-space: nowrap;
-  color: #6b7280;
+  color: var(--text-faint);
   font-size: 12px;
 }
 .col-level {
@@ -714,7 +714,7 @@ onUnmounted(() => {
 }
 .col-logger {
   white-space: nowrap;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 12px;
 }
 .col-message {
@@ -722,13 +722,13 @@ onUnmounted(() => {
 }
 
 .row--error td {
-  color: #fca5a5;
+  color: var(--accent-text-soft);
 }
 .row--critical td {
   color: #d8b4fe;
 }
 .row--warning td {
-  color: #fde68a;
+  color: var(--warn-text);
 }
 
 /* Badges */
@@ -743,7 +743,7 @@ onUnmounted(() => {
 
 .badge--debug {
   background: rgba(107, 114, 128, 0.25);
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 .badge--info {
   background: rgba(59, 130, 246, 0.2);
@@ -755,7 +755,7 @@ onUnmounted(() => {
 }
 .badge--error {
   background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+  color: var(--accent-text-soft);
 }
 .badge--critical {
   background: rgba(168, 85, 247, 0.22);
@@ -763,7 +763,7 @@ onUnmounted(() => {
 }
 
 .error-banner {
-  color: #fca5a5;
+  color: var(--accent-text-soft);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 8px;
@@ -773,14 +773,14 @@ onUnmounted(() => {
 
 .empty-state {
   text-align: center;
-  color: #6b7280;
+  color: var(--text-faint);
   padding: 40px 0;
   font-size: 14px;
 }
 
 .log-count {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-faint);
   margin: 0;
   text-align: right;
 }

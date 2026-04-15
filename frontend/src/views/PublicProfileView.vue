@@ -117,23 +117,23 @@ watch(
   align-items: center;
   gap: 6px;
   text-decoration: none;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--border-medium);
   border-radius: 9px;
-  color: #e5e7eb;
+  color: var(--text-body);
   padding: 8px 12px;
-  background: #161616;
+  background: var(--bg-5);
 }
 
 .back-link:hover {
-  border-color: rgba(239, 68, 68, 0.75);
-  background: rgba(220, 38, 38, 0.16);
-  color: #fff;
+  border-color: var(--accent-outline-soft);
+  background: var(--accent-wash);
+  color: var(--text-main);
 }
 
 .profile-card {
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #1a1a1a;
+  border: 1px solid var(--border-default);
+  background: var(--bg-1);
   padding: 16px;
   display: grid;
   grid-template-columns: 110px 1fr;
@@ -148,7 +148,7 @@ watch(
 }
 
 h1 {
-  color: #fff;
+  color: var(--text-main);
   font-size: 28px;
   margin: 0;
 }
@@ -166,25 +166,25 @@ h1 {
   letter-spacing: 0.04em;
   padding: 4px 8px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #c2c8d2;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--border-faint);
+  color: var(--text-soft);
+  border: 1px solid var(--border-default);
 }
 
 .badge.admin {
-  background: rgba(220, 38, 38, 0.2);
-  border-color: rgba(239, 68, 68, 0.5);
-  color: #fecaca;
+  background: var(--accent-wash-hover);
+  border-color: var(--accent-outline);
+  color: var(--accent-text-soft);
 }
 
 .email {
-  color: #c2c8d2;
+  color: var(--text-soft);
   margin: 6px 0 0;
 }
 
 .own-hint {
   margin-top: 10px;
-  color: #a7f3be;
+  color: var(--ok-text);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -193,12 +193,12 @@ h1 {
 }
 
 .inline-link {
-  color: #86efac;
+  color: var(--ok-text-strong);
 }
 
 .stats {
   margin-top: 12px;
-  color: #e8ebf2;
+  color: var(--text-body);
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
@@ -206,11 +206,11 @@ h1 {
 }
 
 .muted {
-  color: #a7adba;
+  color: var(--text-muted);
 }
 
 .error {
-  color: #fecaca;
+  color: var(--accent-text-soft);
 }
 
 @media (max-width: 560px) {

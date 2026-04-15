@@ -286,9 +286,9 @@ watch(
 
 .contact-list,
 .chat-panel {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-default);
   border-radius: 14px;
-  background: #1a1a1a;
+  background: var(--bg-1);
 }
 
 .contact-list {
@@ -296,7 +296,7 @@ watch(
 }
 
 .contact-list h2 {
-  color: #f4f5f8;
+  color: var(--text-main);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -305,9 +305,9 @@ watch(
 
 .contact-item {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #141414;
-  color: #e5e7eb;
+  border: 1px solid var(--border-default);
+  background: var(--bg-2);
+  color: var(--text-body);
   border-radius: 10px;
   padding: 8px;
   display: flex;
@@ -318,8 +318,8 @@ watch(
 }
 
 .contact-item.active {
-  border-color: rgba(239, 68, 68, 0.7);
-  background: rgba(220, 38, 38, 0.2);
+  border-color: var(--accent-outline-soft);
+  background: var(--accent-wash-hover);
 }
 
 .avatar {
@@ -329,12 +329,12 @@ watch(
 }
 
 .name {
-  color: #fff;
+  color: var(--text-main);
 }
 
 .contact-item small,
 .empty {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .chat-panel {
@@ -344,14 +344,14 @@ watch(
 
 .chat-header {
   padding: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-faint);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
 .chat-header h1 {
-  color: #fff;
+  color: var(--text-main);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -359,9 +359,9 @@ watch(
 }
 
 .status {
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
-  color: #cfd5df;
+  color: var(--text-soft);
   font-size: 12px;
   padding: 2px 8px;
 }
@@ -370,7 +370,7 @@ watch(
   margin: 10px 12px 0;
   border: 1px solid rgba(245, 158, 11, 0.45);
   background: rgba(245, 158, 11, 0.12);
-  color: #fde68a;
+  color: var(--warn-text);
   border-radius: 8px;
   padding: 8px 10px;
   font-size: 13px;
@@ -385,8 +385,8 @@ watch(
 .msg {
   max-width: 72%;
   margin-bottom: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #121212;
+  border: 1px solid var(--border-default);
+  background: var(--bg-3);
   border-radius: 10px;
   padding: 8px;
 }
@@ -394,7 +394,7 @@ watch(
 .msg.mine {
   margin-left: auto;
   border-color: rgba(239, 68, 68, 0.6);
-  background: rgba(220, 38, 38, 0.18);
+  background: var(--accent-wash-hover);
 }
 
 .meta {
@@ -402,23 +402,23 @@ watch(
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
 .msg strong {
-  color: #fff;
+  color: var(--text-main);
 }
 
 .msg p:last-child {
   margin-top: 3px;
-  color: #e5e7eb;
+  color: var(--text-body);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .composer {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-faint);
   padding: 10px;
   display: grid;
   grid-template-columns: 1fr auto;
@@ -427,17 +427,17 @@ watch(
 
 .composer input {
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: #101010;
-  color: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-4);
+  color: var(--text-main);
   padding: 9px 12px;
 }
 
 .composer button {
   border-radius: 999px;
   border: none;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
-  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+  color: var(--text-inverse);
   padding: 8px 14px;
 }
 

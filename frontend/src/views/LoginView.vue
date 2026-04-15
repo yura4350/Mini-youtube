@@ -80,11 +80,11 @@ async function onSubmit() {
 
 .auth-card {
   width: min(460px, 100%);
-  background: rgba(18, 18, 18, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--surface-auth);
+  border: 1px solid var(--border-default);
   border-radius: 18px;
   padding: 28px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-modal);
 }
 
 .auth-icon {
@@ -95,13 +95,13 @@ async function onSubmit() {
   place-items: center;
   font-size: 18px;
   font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, #e0291b, #ff4a2a);
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
   margin-bottom: 14px;
 }
 
 .brand-mark {
-  color: #ff5a3d;
+  color: var(--accent-border-focus);
   letter-spacing: 0.14em;
   font-size: 12px;
   font-weight: 700;
@@ -110,12 +110,12 @@ async function onSubmit() {
 
 h1 {
   font-size: 30px;
-  color: #fff;
+  color: var(--text-main);
   margin-bottom: 6px;
 }
 
 .muted {
-  color: #9ea1a7;
+  color: var(--text-muted);
   margin-bottom: 20px;
 }
 
@@ -127,31 +127,31 @@ h1 {
 label {
   display: grid;
   gap: 6px;
-  color: #e8e8ea;
+  color: var(--text-body);
   font-size: 14px;
 }
 
 input {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(10, 10, 10, 0.86);
-  color: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-auth-input);
+  color: var(--text-main);
   border-radius: 10px;
   padding: 11px 12px;
 }
 
 input:focus {
   outline: none;
-  border-color: #ff5a3d;
-  box-shadow: 0 0 0 3px rgba(255, 90, 61, 0.2);
+  border-color: var(--accent-border-focus);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 button {
   border: none;
   border-radius: 10px;
   padding: 12px;
-  color: #fff;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
   font-weight: 600;
   cursor: pointer;
 }
@@ -163,28 +163,28 @@ button:disabled {
 
 .error {
   margin-top: 12px;
-  color: #ff9f8b;
+  color: var(--accent-text-mid);
   font-size: 14px;
 }
 
 .switch-link {
   margin-top: 18px;
-  color: #cfd2d8;
+  color: var(--link-muted);
   font-size: 14px;
 }
 
 .switch-link a {
   margin-left: 6px;
-  color: #ff7d59;
+  color: var(--accent-text-strong);
 }
 
 .demo-box {
   margin-top: 18px;
   padding: 12px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.35);
-  color: #a5a8ae;
+  border: 1px solid var(--border-faint);
+  background: var(--surface-subtle);
+  color: var(--text-muted);
   font-size: 12px;
 }
 </style>
