@@ -290,7 +290,7 @@ onMounted(() => {
       <div v-else class="prefs-grid prefs-notifications">
         <label class="toggle-row">
           <input v-model="prefs.notifications" type="checkbox" class="prefs-checkbox" />
-          <span>Enable notification preferences (on)</span>
+          <span>Enable Notification Preferences</span>
         </label>
         <div class="prefs-actions">
           <button type="button" :disabled="prefsSavingNotifications" @click="saveNotificationSettings">
