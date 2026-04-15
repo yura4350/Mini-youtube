@@ -98,12 +98,12 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #fff;
+  color: var(--text-main);
   font-size: 26px;
 }
 
 .search-header p {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .video-grid {
@@ -118,11 +118,11 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   margin-top: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-default);
   border-radius: 14px;
   padding: 20px;
-  color: #c2c7d0;
-  background: #1a1a1a;
+  color: var(--text-soft);
+  background: var(--bg-1);
 }
 
 .empty-state {
@@ -130,10 +130,10 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   margin-top: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-default);
   border-radius: 14px;
   padding: 20px;
-  color: #c2c7d0;
-  background: #1a1a1a;
+  color: var(--text-soft);
+  background: var(--bg-1);
 }
 </style>

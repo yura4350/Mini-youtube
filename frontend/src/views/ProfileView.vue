@@ -368,8 +368,8 @@ onMounted(() => {
 .preferences,
 .notification-item {
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #1a1a1a;
+  border: 1px solid var(--border-default);
+  background: var(--bg-1);
 }
 
 .profile-header {
@@ -411,18 +411,18 @@ onMounted(() => {
 }
 
 h1 {
-  color: #fff;
+  color: var(--text-main);
   font-size: 28px;
 }
 
 .email,
 .bio {
-  color: #c2c8d2;
+  color: var(--text-soft);
 }
 
 .stats {
   margin-top: 8px;
-  color: #e8ebf2;
+  color: var(--text-body);
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
@@ -444,12 +444,12 @@ h1 {
 }
 
 .preferences h2 {
-  color: #fff;
+  color: var(--text-main);
   font-size: 18px;
 }
 
 .prefs-hint {
-  color: #a7adba;
+  color: var(--text-muted);
   font-size: 13px;
   margin-top: 4px;
 }
@@ -462,7 +462,7 @@ h1 {
 .prefs-field {
   display: grid;
   gap: 6px;
-  color: #e9ebef;
+  color: var(--text-body);
   font-size: 14px;
 }
 
@@ -470,7 +470,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #e9ebef;
+  color: var(--text-body);
   font-size: 14px;
   cursor: pointer;
 }
@@ -478,14 +478,14 @@ h1 {
 .prefs-checkbox {
   width: 18px;
   height: 18px;
-  accent-color: #ef4444;
+  accent-color: var(--accent-soft);
 }
 
 .prefs-select {
   max-width: 420px;
-  background: #0f0f0f;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: var(--bg-0);
+  border: 1px solid var(--border-strong);
+  color: var(--text-main);
   border-radius: 9px;
   padding: 9px 11px;
 }
@@ -507,7 +507,7 @@ h1 {
 }
 
 .editor h2 {
-  color: #fff;
+  color: var(--text-main);
   font-size: 18px;
 }
 
@@ -520,15 +520,15 @@ h1 {
 label {
   display: grid;
   gap: 6px;
-  color: #e9ebef;
+  color: var(--text-body);
   font-size: 14px;
 }
 
 input,
 textarea {
-  background: #0f0f0f;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: var(--bg-0);
+  border: 1px solid var(--border-strong);
+  color: var(--text-main);
   border-radius: 9px;
   padding: 9px 11px;
 }
@@ -545,12 +545,12 @@ button {
   border: none;
   border-radius: 9px;
   padding: 8px 12px;
-  color: #fff;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
 }
 
 button.ghost {
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid var(--border-heavy);
   background: transparent;
 }
 
@@ -562,15 +562,15 @@ button.ghost {
 }
 
 .tabs button {
-  background: #161616;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #dadde5;
+  background: var(--bg-5);
+  border: 1px solid var(--border-medium);
+  color: var(--text-subtle);
 }
 
 .tabs button.active {
-  background: rgba(220, 38, 38, 0.2);
-  border-color: rgba(239, 68, 68, 0.75);
-  color: #fff;
+  background: var(--accent-wash-hover);
+  border-color: var(--accent-outline-soft);
+  color: var(--text-main);
 }
 
 .inbox-link {
@@ -578,17 +578,17 @@ button.ghost {
   align-items: center;
   gap: 6px;
   text-decoration: none;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--border-medium);
   border-radius: 9px;
-  color: #e5e7eb;
+  color: var(--text-body);
   padding: 8px 12px;
-  background: #161616;
+  background: var(--bg-5);
 }
 
 .inbox-link:hover {
-  border-color: rgba(239, 68, 68, 0.75);
-  background: rgba(220, 38, 38, 0.16);
-  color: #fff;
+  border-color: var(--accent-outline-soft);
+  background: var(--accent-wash);
+  color: var(--text-main);
 }
 
 .video-grid {
@@ -599,12 +599,12 @@ button.ghost {
 }
 
 .muted {
-  color: #a7adba;
+  color: var(--text-muted);
 }
 
 .ok {
   margin-top: 10px;
-  color: #a7f3be;
+  color: var(--ok-text);
 }
 
 @media (max-width: 760px) {

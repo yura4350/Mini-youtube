@@ -153,9 +153,9 @@ onMounted(() => {
 }
 
 .history-shell {
-  border: 1px solid rgba(255, 255, 255, 0.13);
+  border: 1px solid var(--border-default);
   border-radius: 16px;
-  background: #171717;
+  background: var(--bg-6);
   padding: 14px;
 }
 
@@ -168,7 +168,7 @@ onMounted(() => {
 }
 
 .history-header h1 {
-  color: #fff;
+  color: var(--text-main);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -176,7 +176,7 @@ onMounted(() => {
 }
 
 .history-header p {
-  color: #aeb4c0;
+  color: var(--text-muted);
   margin-top: 4px;
 }
 
@@ -193,8 +193,8 @@ button {
   border: none;
   border-radius: 9px;
   padding: 8px 11px;
-  color: #fff;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
@@ -211,19 +211,19 @@ button:disabled {
 }
 
 button.ghost {
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid var(--border-heavy);
   background: transparent;
 }
 
 button.ghost:hover:not(:disabled) {
-  border-color: rgba(239, 68, 68, 0.75);
-  background: rgba(220, 38, 38, 0.18);
+  border-color: var(--accent-outline-soft);
+  background: var(--accent-wash-hover);
 }
 
 .status-box {
-  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border: 1px dashed var(--border-strong);
   border-radius: 12px;
-  color: #d5dae3;
+  color: var(--text-subtle);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -250,9 +250,9 @@ button.ghost:hover:not(:disabled) {
 }
 
 .video-card {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-default);
   border-radius: 12px;
-  background: #1f1f1f;
+  background: var(--bg-7);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -260,7 +260,7 @@ button.ghost:hover:not(:disabled) {
 }
 
 .video-card:hover {
-  border-color: rgba(239, 68, 68, 0.4);
+  border-color: var(--accent-outline);
   transform: translateY(-2px);
 }
 
@@ -268,7 +268,7 @@ button.ghost:hover:not(:disabled) {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  background: #0a0a0a;
+  background: var(--bg-8);
   overflow: hidden;
 }
 
@@ -284,12 +284,12 @@ button.ghost:hover:not(:disabled) {
   left: 0;
   width: 100%;
   height: 3px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--border-default);
 }
 
 .position-fill {
   height: 100%;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
   transition: width 300ms ease;
 }
 
@@ -298,7 +298,7 @@ button.ghost:hover:not(:disabled) {
   bottom: 6px;
   right: 6px;
   font-size: 11px;
-  color: #fff;
+  color: var(--text-main);
   background: rgba(0, 0, 0, 0.6);
   padding: 2px 6px;
   border-radius: 4px;
@@ -312,7 +312,7 @@ button.ghost:hover:not(:disabled) {
 }
 
 .video-title {
-  color: #fff;
+  color: var(--text-main);
   font-size: 14px;
   font-weight: 600;
   line-height: 1.3;
@@ -324,13 +324,13 @@ button.ghost:hover:not(:disabled) {
 }
 
 .channel-name {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 13px;
   margin: 4px 0 0;
 }
 
 .last-watched {
-  color: #6b7280;
+  color: var(--text-faint);
   font-size: 12px;
   margin-top: auto;
   padding-top: 8px;
@@ -348,8 +348,8 @@ button.ghost:hover:not(:disabled) {
 .continue-btn {
   flex: 1;
   padding: 8px 12px;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
-  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+  color: var(--text-inverse);
   border: none;
   border-radius: 8px;
   font-size: 13px;

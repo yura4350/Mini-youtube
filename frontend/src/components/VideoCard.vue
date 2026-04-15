@@ -41,7 +41,7 @@ defineProps<{ video: VideoItem }>()
   aspect-ratio: 16 / 9;
   border-radius: 14px;
   overflow: hidden;
-  background: #1f1f1f;
+  background: var(--bg-7);
 }
 
 .thumb {
@@ -62,7 +62,7 @@ defineProps<{ video: VideoItem }>()
   font-size: 12px;
   padding: 2px 6px;
   border-radius: 6px;
-  color: #fff;
+  color: var(--text-inverse);
   background: rgba(0, 0, 0, 0.72);
 }
 
@@ -80,14 +80,14 @@ defineProps<{ video: VideoItem }>()
 }
 
 .meta-text h3 {
-  color: #f3f4f6;
+  color: var(--text-main);
   font-size: 14px;
   line-height: 1.3;
   margin-bottom: 2px;
 }
 
 .author {
-  color: #c1c5ce;
+  color: var(--text-soft);
   font-size: 13px;
 }
 
@@ -95,7 +95,7 @@ defineProps<{ video: VideoItem }>()
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 12px;
 }
 

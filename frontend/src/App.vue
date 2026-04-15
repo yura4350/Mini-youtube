@@ -394,8 +394,8 @@ function submitSearch() {
   align-items: center;
   justify-content: space-between;
   backdrop-filter: blur(8px);
-  background: rgba(7, 8, 10, 0.8);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--topbar-bg);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .searchbar {
@@ -414,9 +414,9 @@ function submitSearch() {
 .searchbar input {
   width: 100%;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: #121212;
-  color: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-3);
+  color: var(--text-main);
   padding: 9px 14px;
 }
 
@@ -425,33 +425,33 @@ function submitSearch() {
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: #1a1a1a;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: var(--bg-1);
+  border: 1px solid var(--border-medium);
   border-radius: 12px;
   list-style: none;
   margin: 0;
   padding: 4px 0;
   z-index: 20;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-dropdown);
 }
 
 .suggestions-list li {
   padding: 8px 14px;
-  color: #d4d7de;
+  color: var(--text-subtle);
   font-size: 14px;
   cursor: pointer;
 }
 
 .suggestions-list li:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--overlay-hover);
+  color: var(--text-main);
 }
 
 .searchbar button {
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: #202020;
-  color: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text-main);
   padding: 9px 14px;
   cursor: pointer;
 }
@@ -467,7 +467,7 @@ function submitSearch() {
   align-items: center;
   gap: 8px;
   font-size: 20px;
-  color: #fff;
+  color: var(--text-main);
   text-decoration: none;
   letter-spacing: 0.03em;
   font-weight: 700;
@@ -480,7 +480,8 @@ function submitSearch() {
   display: grid;
   place-items: center;
   font-size: 11px;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
 }
 
 .topnav {
@@ -493,7 +494,7 @@ function submitSearch() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #d4d7de;
+  color: var(--text-subtle);
   text-decoration: none;
   font-size: 14px;
   padding: 8px 10px;
@@ -512,7 +513,7 @@ function submitSearch() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #d4d7de;
+  color: var(--text-subtle);
   border: none;
   background: transparent;
   font-size: 14px;
@@ -522,8 +523,8 @@ function submitSearch() {
 }
 
 .notify-trigger:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--overlay-hover-mid);
+  color: var(--text-main);
 }
 
 .notify-icon-wrap {
@@ -542,8 +543,8 @@ function submitSearch() {
   font-size: 11px;
   display: grid;
   place-items: center;
-  background: #ef4444;
-  color: #fff;
+  background: var(--accent-soft);
+  color: var(--text-inverse);
   border: 1px solid rgba(0, 0, 0, 0.45);
 }
 
@@ -553,10 +554,10 @@ function submitSearch() {
   top: calc(100% + 8px);
   width: 320px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #141414;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-2);
   padding: 10px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.38);
+  box-shadow: var(--shadow-dropdown-lg);
 }
 
 .notify-dropdown header {
@@ -566,14 +567,14 @@ function submitSearch() {
 }
 
 .notify-dropdown h3 {
-  color: #fff;
+  color: var(--text-main);
   font-size: 14px;
 }
 
 .mini-btn {
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid var(--border-heavy);
   background: transparent;
-  color: #f3f4f6;
+  color: var(--text-main);
   border-radius: 7px;
   padding: 4px 8px;
   font-size: 12px;
@@ -581,7 +582,7 @@ function submitSearch() {
 }
 
 .dropdown-loading {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 13px;
   margin-top: 8px;
 }
@@ -596,19 +597,19 @@ function submitSearch() {
 }
 
 .dropdown-item {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 8px;
   cursor: pointer;
 }
 
 .dropdown-item.unread {
-  border-color: rgba(239, 68, 68, 0.65);
-  background: rgba(220, 38, 38, 0.16);
+  border-color: var(--accent-outline);
+  background: var(--accent-wash);
 }
 
 .dropdown-item p {
-  color: #e5e7eb;
+  color: var(--text-body);
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
@@ -616,12 +617,12 @@ function submitSearch() {
 }
 
 .dropdown-item small {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 11px;
 }
 
 .dropdown-separator {
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid var(--border-default);
   margin: 10px 0;
 }
 
@@ -633,9 +634,9 @@ function submitSearch() {
 }
 
 .peer-chip {
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: #1d1d1d;
-  color: #e5e7eb;
+  border: 1px solid var(--border-medium);
+  background: var(--surface-chip);
+  color: var(--text-body);
   border-radius: 999px;
   padding: 5px 10px;
   font-size: 12px;
@@ -643,23 +644,23 @@ function submitSearch() {
 }
 
 .peer-chip:hover {
-  border-color: rgba(239, 68, 68, 0.75);
-  background: rgba(220, 38, 38, 0.18);
+  border-color: var(--accent-outline-soft);
+  background: var(--accent-wash-hover);
 }
 
 .topnav a.router-link-exact-active,
 .topnav a:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--overlay-hover-mid);
+  color: var(--text-main);
 }
 
 .logout-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid var(--border-extra);
   background: transparent;
-  color: #fff;
+  color: var(--text-main);
   border-radius: 8px;
   padding: 8px 10px;
   cursor: pointer;
