@@ -48,7 +48,7 @@ class User(Base):
     hashed_pwd = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
 
-    preferences = relationship("UserPreferences", back_populates="user")
+    preferences = relationship("UserPreferences", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 # User Preferences Table
 class UserPreferences(Base):
@@ -56,7 +56,7 @@ class UserPreferences(Base):
 
     __tablename__ = "user_preferences"
 
-    user_id = mapped_column(Integer, ForeignKey("users.id"), primary_key=True)
+    user_id = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     privacy = mapped_column(String, nullable=False, default="public")
     notifications = mapped_column(Boolean, nullable=False, default=True)
     ui_theme = mapped_column(String, nullable=False, default="system")
