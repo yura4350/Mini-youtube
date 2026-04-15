@@ -325,23 +325,6 @@ def get_user(user_id:int, current_user:User = Depends(get_current_active_user), 
 
     return user
 
-# Update any user (should be removed in the future)
-@app.put("/user/{user_id}", response_model=UserResponse)
-def update_user(user_id:int, update_user:UserCreate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.id == user_id).first()
-
-    if not db_user:
-        raise HTTPException(status_code=404, detail="User does not exist")
-    
-    db_user.name = update_user.name
-    db_user.email = update_user.email
-    db_user.role = update_user.role
-
-
-    db.commit()
-    db.refresh(db_user)
-    return db_user
-
 # Endpoint to let user update himself
 @app.put("/user/profile/edit", response_model=UserResponse)
 def update_user(update_user:UserUpdate, current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
