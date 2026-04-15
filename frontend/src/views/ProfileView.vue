@@ -552,6 +552,7 @@ button {
 button.ghost {
   border: 1px solid var(--border-heavy);
   background: transparent;
+  color: var(--text-main);
 }
 
 .tabs {
