@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { formatViews } from '@/services/video-format'
-import { fetchVideoById, fetchVideos, updateVideo, deleteVideo } from '@/services/videos'
+import { fetchVideoById, fetchVideoTranscript, fetchVideos, updateVideo, deleteVideo } from '@/services/videos'
 import { toApiUploaderId } from '@/services/user-id'
 import { recordWatchEvent, fetchSubscribedChannelIds, subscribeToChannel, unsubscribeFromChannel } from '@/services/dashboard'
 import { summarizeVideo } from '@/services/intelligence'
@@ -31,6 +31,15 @@ const aiSummarySource = ref('')
 const aiSummaryGeneratedAt = ref('')
 const aiSummaryLoading = ref(false)
 const aiSummaryError = ref('')
+const transcriptText = ref('')
+const transcriptStatus = ref<'idle' | 'pending' | 'queued' | 'processing' | 'ready' | 'failed'>('idle')
+const transcriptLoading = ref(false)
+const transcriptError = ref('')
+const transcriptFailureReason = ref('')
+const transcriptSource = ref('')
+const transcriptLanguage = ref('')
+const transcriptUpdatedAt = ref('')
+const transcriptExpanded = ref(false)
 const chatMessages = ref<ChatMessage[]>([])
 const chatInput = ref('')
 const chatConnected = ref(false)
@@ -374,6 +383,34 @@ async function generateAiSummary() {
   }
 }
 
+async function loadTranscript() {
+  if (!currentVideo.value) return
+
+  transcriptLoading.value = true
+  transcriptError.value = ''
+
+  try {
+    const result = await fetchVideoTranscript(currentVideo.value.id)
+    transcriptStatus.value = result.status
+    transcriptText.value = result.transcript_text || ''
+    transcriptFailureReason.value = result.error_message || ''
+    transcriptSource.value = result.source || ''
+    transcriptLanguage.value = result.language || ''
+    transcriptUpdatedAt.value = result.updated_at || ''
+  } catch (error) {
+    transcriptError.value = error instanceof Error ? error.message : 'Failed to load transcript.'
+  } finally {
+    transcriptLoading.value = false
+  }
+}
+
+async function toggleTranscriptPanel() {
+  transcriptExpanded.value = !transcriptExpanded.value
+  if (transcriptExpanded.value && transcriptStatus.value === 'idle') {
+    await loadTranscript()
+  }
+}
+
 watch(
   () => route.params.id,
   () => {
@@ -382,6 +419,14 @@ watch(
     aiSummarySource.value = ''
     aiSummaryGeneratedAt.value = ''
     aiSummaryError.value = ''
+    transcriptText.value = ''
+    transcriptStatus.value = 'idle'
+    transcriptError.value = ''
+    transcriptFailureReason.value = ''
+    transcriptSource.value = ''
+    transcriptLanguage.value = ''
+    transcriptUpdatedAt.value = ''
+    transcriptExpanded.value = false
     stopRecordingWatchEvents()
     loadCurrentVideo()
   },
@@ -392,6 +437,7 @@ watch(
   () => {
     connectChat()
     loadMySubscriptions()
+    loadTranscript()
   },
 )
 
@@ -435,6 +481,10 @@ watch(
           <AppIcon name="search" :size="14" />
           {{ aiSummaryLoading ? 'Generating summary...' : 'AI Summary' }}
         </button>
+        <button @click="toggleTranscriptPanel" class="btn-transcript">
+          <AppIcon name="search" :size="14" />
+          {{ transcriptExpanded ? 'Hide Transcript' : 'Auto Transcript' }}
+        </button>
         <button v-if="isOwner && !isEditing" @click="startEditing" class="btn-edit">
           <AppIcon name="video" :size="14" /> Edit
         </button>
@@ -444,6 +494,7 @@ watch(
       </div>
       <p v-if="subscribeMessage" class="subscribe-error">{{ subscribeMessage }}</p>
       <p v-if="aiSummaryError" class="subscribe-error">{{ aiSummaryError }}</p>
+      <p v-if="transcriptError" class="subscribe-error">{{ transcriptError }}</p>
 
       <section v-if="aiSummaryLoading || aiSummary" class="ai-summary-card">
         <header class="ai-summary-head">
@@ -457,6 +508,31 @@ watch(
           Crafting a concise summary...
         </p>
         <p v-else class="ai-summary-text">{{ aiSummary }}</p>
+      </section>
+
+      <section v-if="transcriptExpanded" class="transcript-card">
+        <header class="transcript-head">
+          <h2><AppIcon name="search" :size="14" /> Auto Transcript</h2>
+          <div class="transcript-actions">
+            <button class="transcript-refresh" :disabled="transcriptLoading" @click="loadTranscript">
+              {{ transcriptLoading ? 'Refreshing...' : 'Refresh' }}
+            </button>
+            <button class="transcript-refresh" @click="transcriptExpanded = false">Close</button>
+          </div>
+        </header>
+        <p v-if="transcriptStatus === 'pending' || transcriptStatus === 'queued' || transcriptStatus === 'processing'" class="transcript-note">
+          Transcript is still processing. Try refresh in a moment.
+        </p>
+        <p v-else-if="transcriptStatus === 'failed'" class="transcript-failed">
+          Transcript processing failed. {{ transcriptFailureReason || 'Check video service logs and retry.' }}
+        </p>
+        <p v-else-if="transcriptText" class="transcript-text">{{ transcriptText }}</p>
+        <p v-else class="transcript-note">No transcript yet.</p>
+        <small v-if="transcriptText" class="transcript-meta">
+          Source: {{ transcriptSource || 'unknown' }}
+          <span v-if="transcriptLanguage">• Language: {{ transcriptLanguage }}</span>
+          <span v-if="transcriptUpdatedAt">• Updated: {{ new Date(transcriptUpdatedAt).toLocaleString() }}</span>
+        </small>
       </section>
 
       <div v-if="isEditing" class="edit-form">
@@ -610,6 +686,7 @@ h1 {
 .btn-delete,
 .btn-subscribe,
 .btn-ai-summary,
+.btn-transcript,
 .btn-save,
 .btn-cancel {
   display: inline-flex;
@@ -655,6 +732,20 @@ h1 {
 .btn-ai-summary:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.35), 0 9px 20px rgba(8, 47, 73, 0.4);
+}
+
+.btn-transcript {
+  background: #20242c;
+  color: #e6ecf8;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-transcript:hover {
+  background: #2a303a;
+  border-color: rgba(148, 163, 184, 0.62);
 }
 
 .btn-subscribe {
@@ -747,6 +838,85 @@ h1 {
 .ai-summary-placeholder {
   opacity: 0.88;
   font-style: italic;
+}
+
+.transcript-card {
+  margin-top: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #17191f;
+  padding: 12px;
+}
+
+.transcript-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.transcript-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transcript-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #e5e7eb;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.transcript-refresh {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #21242d;
+  color: #eef2ff;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.transcript-refresh:hover:not(:disabled) {
+  background: #2a2f3a;
+}
+
+.transcript-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.transcript-note {
+  margin-top: 8px;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.transcript-failed {
+  margin-top: 8px;
+  color: #fca5a5;
+  font-size: 14px;
+}
+
+.transcript-text {
+  margin-top: 8px;
+  color: #e5e7eb;
+  line-height: 1.55;
+  font-size: 14px;
+  max-height: 180px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.transcript-meta {
+  margin-top: 8px;
+  display: block;
+  color: #94a3b8;
+  font-size: 12px;
 }
 
 .btn-edit {

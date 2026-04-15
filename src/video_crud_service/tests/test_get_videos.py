@@ -1,4 +1,4 @@
-from src.video_crud_service.models import Video
+from src.video_crud_service.models import Video, VideoTranscript
 from .conftest import create_test_video
 
 
@@ -61,3 +61,35 @@ def test_serialized_video_structure(client, test_db):
     assert required_fields.issubset(data.keys())
     assert data["playback_url"] == f"/videos/{video.id}/play"
     assert data["thumbnail_url"] == f"/videos/{video.id}/thumbnail"
+
+
+def test_get_video_transcript_pending_when_not_ready(client, test_db):
+    video = create_test_video(test_db, title="Transcript pending")
+    response = client.get(f"/videos/{video.id}/transcript")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["video_id"] == video.id
+    assert data["status"] == "pending"
+    assert data["transcript_text"] == ""
+
+
+def test_get_video_transcript_ready(client, test_db):
+    video = create_test_video(test_db, title="Transcript ready")
+    row = VideoTranscript(
+        video_id=video.id,
+        transcript_text="Hello from ASR.",
+        source="faster_whisper",
+        status="ready",
+        error_message=None,
+        language="en",
+    )
+    test_db.add(row)
+    test_db.commit()
+
+    response = client.get(f"/videos/{video.id}/transcript")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["video_id"] == video.id
+    assert data["status"] == "ready"
+    assert data["transcript_text"] == "Hello from ASR."
+    assert data["source"] == "faster_whisper"

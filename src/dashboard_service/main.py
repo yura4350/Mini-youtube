@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.video_crud_service.database import SessionLocal, init_db
-from src.video_crud_service.models import Video
+from src.video_crud_service.models import Video, VideoTranscript
 from src.video_crud_service.videos import serialize_video
 from src.communication_service.models import Notification
 from src.dashboard_service.models import SearchHistory, WatchHistory, Subscription
@@ -101,9 +101,18 @@ def _clip_text(value: str, max_length: int) -> str:
     return f"{compact[: max_length - 3].rstrip()}..."
 
 
-def _build_summary_source_text(video: Video, subtitle_text: str | None) -> tuple[str, str]:
+def _build_summary_source_text(
+    *,
+    db: Session,
+    video: Video,
+    subtitle_text: str | None,
+) -> tuple[str, str]:
     if subtitle_text and subtitle_text.strip():
         return subtitle_text.strip(), "subtitle_text"
+
+    transcript_row = db.query(VideoTranscript).filter(VideoTranscript.video_id == video.id).first()
+    if transcript_row and transcript_row.transcript_text and transcript_row.transcript_text.strip():
+        return transcript_row.transcript_text.strip(), "subtitle_text"
 
     tags = ", ".join([tag.strip() for tag in (video.tags or "").split(",") if tag.strip()])
     metadata_text = (
@@ -191,7 +200,11 @@ async def ai_summarize(payload: SummarizeRequest, db: Session = Depends(get_db))
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    source_text, source_kind = _build_summary_source_text(video, payload.subtitle_text)
+    source_text, source_kind = _build_summary_source_text(
+        db=db,
+        video=video,
+        subtitle_text=payload.subtitle_text,
+    )
     proxied = await _proxy_ai_summarize(
         {
             "video_id": video.id,

@@ -41,6 +41,26 @@ export async function fetchVideoById(videoId: string): Promise<VideoItem> {
   return mapVideoApiItemToVideoItem(payload)
 }
 
+export interface VideoTranscriptItem {
+  video_id: string
+  status: 'pending' | 'queued' | 'processing' | 'ready' | 'failed'
+  transcript_text: string
+  source: string | null
+  error_message: string | null
+  language: string | null
+  updated_at: string | null
+}
+
+export async function fetchVideoTranscript(videoId: string): Promise<VideoTranscriptItem> {
+  const response = await fetch(`${API_BASE_URL}/videos/${videoId}/transcript`)
+
+  if (!response.ok) {
+    throw new Error(await parseError(response))
+  }
+
+  return (await response.json()) as VideoTranscriptItem
+}
+
 export interface UploadVideoPayload {
   file: File
   title: string

@@ -19,6 +19,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        INSTALL_ASR_DEPS: "1"
     container_name: media_server_video
     restart: unless-stopped
     depends_on:
@@ -28,6 +30,9 @@ services:
       DATABASE_URL: postgresql://media_user:media_pass@db:5432/media_db
       PYTHONUNBUFFERED: "1"
       COMMUNICATION_API_BASE_URL: http://communication:8002
+      ASR_ENABLED: "true"
+      ASR_MODEL_SIZE: "tiny"
+      ASR_COMPUTE_TYPE: "int8"
     ports:
       - "8000:8000"
     volumes:

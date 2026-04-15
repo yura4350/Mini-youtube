@@ -1,16 +1,17 @@
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 import subprocess
 from uuid import uuid4
 
 import httpx
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, Depends, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from src.dashboard_service.models import Subscription
-from .models import Video
+from .models import Video, VideoTranscript
 from .database import SessionLocal
 
 router = APIRouter(prefix="/videos", tags=["videos"])
@@ -22,6 +23,10 @@ THUMBNAIL_DIR = UPLOAD_DIR / "thumbnails"
 THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
 COMMUNICATION_API_BASE_URL = os.getenv("COMMUNICATION_API_BASE_URL", "").strip().rstrip("/")
 MAX_NOTIFICATION_MESSAGE_LENGTH = 180
+ASR_ENABLED = os.getenv("ASR_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+ASR_MODEL_SIZE = os.getenv("ASR_MODEL_SIZE", "tiny").strip() or "tiny"
+ASR_COMPUTE_TYPE = os.getenv("ASR_COMPUTE_TYPE", "int8").strip() or "int8"
+MAX_TRANSCRIPT_CHARS = 20000
 
 
 def _split_tags(tags: str) -> list[str]:
@@ -59,6 +64,141 @@ def _generate_first_frame_thumbnail(video_path: Path, thumbnail_path: Path) -> b
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
+
+
+def _transcribe_video_audio_to_text(video_path: Path) -> tuple[str, str | None] | None:
+    if not ASR_ENABLED:
+        return None
+
+    try:
+        from faster_whisper import WhisperModel  # type: ignore
+    except Exception as exc:
+        logger.warning("Automatic ASR skipped: faster_whisper import failed: %s", exc)
+        return None
+
+    try:
+        model = WhisperModel(ASR_MODEL_SIZE, compute_type=ASR_COMPUTE_TYPE)
+        segments, info = model.transcribe(str(video_path), vad_filter=True)
+        text_parts = [segment.text.strip() for segment in segments if segment.text and segment.text.strip()]
+        transcript_text = " ".join(text_parts).strip()
+        if not transcript_text:
+            return None
+        if len(transcript_text) > MAX_TRANSCRIPT_CHARS:
+            transcript_text = transcript_text[:MAX_TRANSCRIPT_CHARS]
+        language = getattr(info, "language", None)
+        return transcript_text, language
+    except Exception:
+        logger.exception("Automatic ASR failed for file=%s", video_path)
+        return None
+
+
+def _upsert_video_transcript(
+    db: Session,
+    *,
+    video_id: str,
+    transcript_text: str = "",
+    source: str = "asr",
+    status: str = "queued",
+    error_message: str | None = None,
+    language: str | None = None,
+) -> None:
+    row = db.query(VideoTranscript).filter(VideoTranscript.video_id == video_id).first()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if row:
+        row.transcript_text = transcript_text
+        row.source = source
+        row.status = status
+        row.error_message = error_message
+        row.language = language
+        row.updated_at = now
+    else:
+        db.add(
+            VideoTranscript(
+                video_id=video_id,
+                transcript_text=transcript_text,
+                source=source,
+                status=status,
+                error_message=error_message,
+                language=language,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+    db.commit()
+
+
+def _best_effort_update_transcript(
+    *,
+    video_id: str,
+    transcript_text: str = "",
+    source: str = "faster_whisper",
+    status: str,
+    error_message: str | None = None,
+    language: str | None = None,
+) -> None:
+    db = SessionLocal()
+    try:
+        _upsert_video_transcript(
+            db,
+            video_id=video_id,
+            transcript_text=transcript_text,
+            source=source,
+            status=status,
+            error_message=error_message,
+            language=language,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to update transcript state=%s for video_id=%s",
+            status,
+            video_id,
+        )
+    finally:
+        db.close()
+
+
+def _generate_and_store_transcript_for_video(video_id: str, video_path: str) -> None:
+    _best_effort_update_transcript(
+        video_id=video_id,
+        transcript_text="",
+        source="faster_whisper",
+        status="processing",
+        error_message=None,
+        language=None,
+    )
+
+    if not ASR_ENABLED:
+        _best_effort_update_transcript(
+            video_id=video_id,
+            transcript_text="",
+            source="faster_whisper",
+            status="failed",
+            error_message="ASR is disabled by configuration.",
+            language=None,
+        )
+        return
+
+    result = _transcribe_video_audio_to_text(Path(video_path))
+    if not result:
+        _best_effort_update_transcript(
+            video_id=video_id,
+            transcript_text="",
+            source="faster_whisper",
+            status="failed",
+            error_message="ASR produced no transcript or failed. Check video service logs.",
+            language=None,
+        )
+        return
+
+    transcript_text, language = result
+    _best_effort_update_transcript(
+        video_id=video_id,
+        transcript_text=transcript_text,
+        source="faster_whisper",
+        status="ready",
+        error_message=None,
+        language=language,
+    )
 
 
 def serialize_video(video: Video) -> dict:
@@ -142,6 +282,7 @@ def ping_videos():
 
 @router.post("/upload")
 async def upload_video(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     title: str = Form(...),
     description: str = Form(""),
@@ -198,6 +339,27 @@ async def upload_video(
     db.add(video)
     db.commit()
     db.refresh(video)
+    if ASR_ENABLED:
+        _upsert_video_transcript(
+            db,
+            video_id=video.id,
+            transcript_text="",
+            source="faster_whisper",
+            status="queued",
+            error_message=None,
+            language=None,
+        )
+        background_tasks.add_task(_generate_and_store_transcript_for_video, video.id, str(saved_path))
+    else:
+        _upsert_video_transcript(
+            db,
+            video_id=video.id,
+            transcript_text="",
+            source="faster_whisper",
+            status="failed",
+            error_message="ASR is disabled by configuration.",
+            language=None,
+        )
     try:
         await _notify_subscribers_new_video(db, video)
     except Exception:
@@ -220,6 +382,35 @@ def get_video(video_id: str, db: Session = Depends(get_db)):
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
     return serialize_video(video)
+
+
+@router.get("/{video_id}/transcript")
+def get_video_transcript(video_id: str, db: Session = Depends(get_db)):
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    row = db.query(VideoTranscript).filter(VideoTranscript.video_id == video_id).first()
+    if not row:
+        return {
+            "video_id": video_id,
+            "status": "pending",
+            "transcript_text": "",
+            "source": None,
+            "error_message": None,
+            "language": None,
+            "updated_at": None,
+        }
+
+    return {
+        "video_id": video_id,
+        "status": row.status or "ready",
+        "transcript_text": row.transcript_text,
+        "source": row.source,
+        "error_message": row.error_message,
+        "language": row.language,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
 
 
 @router.get("/{video_id}/play")

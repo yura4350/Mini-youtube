@@ -1,4 +1,4 @@
-from .conftest import create_test_video
+from .conftest import create_test_video, create_test_transcript
 
 
 def test_ai_health(client):
@@ -56,3 +56,27 @@ def test_ai_summarize_uses_subtitle_text_when_provided(client, test_db):
 
     assert data["source_kind"] == "subtitle_text"
     assert "rate limiting in API gateways" in data["summary"]
+
+
+def test_ai_summarize_uses_stored_transcript_when_available(client, test_db):
+    video = create_test_video(test_db, title="Cloud databases", uploader_id=9)
+    create_test_transcript(
+        test_db,
+        video_id=video.id,
+        transcript_text=(
+            "Today we explain replication lag in distributed databases. "
+            "Then we compare eventual consistency and strong consistency."
+        ),
+    )
+
+    response = client.post(
+        "/ai/summarize",
+        json={
+            "video_id": video.id,
+            "max_sentences": 1,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["source_kind"] == "subtitle_text"
+    assert "replication lag in distributed databases" in data["summary"]
