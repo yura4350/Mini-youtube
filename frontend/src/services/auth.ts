@@ -1,4 +1,14 @@
-import type { AuthResult, LoginPayload, RegisterPayload, User, BackendUser, BackendToken } from '@/types/auth'
+import type {
+  AuthResult,
+  LoginPayload,
+  RegisterPayload,
+  User,
+  BackendUser,
+  BackendToken,
+  UserPreferencesDTO,
+  UserPreferencesPatch,
+  PreferencesUpdateResult,
+} from '@/types/auth'
 
 // Use the environment variable of where the backend is hosted
 const DEFAULT_HOST =
@@ -55,6 +65,74 @@ function saveToken(token: string) {
 
 function getToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY)
+}
+
+/** Sync stored UI theme to the document (backend values: dark | light, default dark). */
+export function applyDocumentUiTheme(theme: string) {
+  if (typeof document === 'undefined') return
+  const normalized = theme === 'light' ? 'light' : 'dark'
+  document.documentElement.dataset.uiTheme = normalized
+}
+
+async function fetchUserPreferences(tokenOverride?: string | null): Promise<UserPreferencesDTO | null> {
+  const token = tokenOverride ?? getToken()
+  if (!token) return null
+
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/user/preferences`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (response.status === 401) {
+      logout()
+      return null
+    }
+
+    if (!response.ok) return null
+
+    return (await response.json()) as UserPreferencesDTO
+  } catch {
+    return null
+  }
+}
+
+async function updateUserPreferences(patch: UserPreferencesPatch): Promise<PreferencesUpdateResult> {
+  const token = getToken()
+  if (!token) {
+    return { ok: false, message: 'No active session.' }
+  }
+
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/user/preferences/update`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(patch),
+    })
+
+    if (response.status === 401) {
+      logout()
+      return { ok: false, message: 'Session expired. Sign in again.' }
+    }
+
+    if (!response.ok) {
+      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      return {
+        ok: false,
+        message: err?.detail ?? 'Preferences update failed.',
+      }
+    }
+
+    const preferences = (await response.json()) as UserPreferencesDTO
+    applyDocumentUiTheme(preferences.ui_theme)
+    return { ok: true, preferences }
+  } catch {
+    return { ok: false, message: 'Unable to reach auth service.' }
+  }
 }
 
 function saveCurrentUser(user: User | null) {
@@ -386,5 +464,7 @@ export const authService = {
   fetchPublicProfile,
   updateCurrentUser,
   uploadAvatar,
+  fetchUserPreferences,
+  updateUserPreferences,
   logout,
 }

@@ -51,3 +51,22 @@ export interface BackendToken { // matches Token
   access_token: string
   token_type: string
 }
+
+/** Matches UserPreferencesResponse from user_prefs_and_accounts_service. */
+export interface UserPreferencesDTO {
+  user_id: number
+  privacy: string
+  notifications: boolean
+  ui_theme: string
+}
+
+/** Matches UserPreferencesUpdate (PATCH body). */
+export type UserPreferencesPatch = {
+  privacy?: string
+  notifications?: boolean
+  ui_theme?: string
+}
+
+export type PreferencesUpdateResult =
+  | { ok: true; preferences: UserPreferencesDTO }
+  | { ok: false; message: string }
