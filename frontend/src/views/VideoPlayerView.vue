@@ -7,7 +7,7 @@ import { formatViews } from '@/services/video-format'
 import { fetchVideoById, fetchVideoTranscript, fetchVideos, updateVideo, deleteVideo } from '@/services/videos'
 import { toApiUploaderId } from '@/services/user-id'
 import { recordWatchEvent, fetchSubscribedChannelIds, subscribeToChannel, unsubscribeFromChannel } from '@/services/dashboard'
-import { summarizeVideo, fetchAiSummaryStatus, retryAiSummary } from '@/services/intelligence'
+import { summarizeVideo, fetchAiSummaryStatus, retryAiSummary, fetchAiTags } from '@/services/intelligence'
 import { useAuthStore } from '@/stores/auth'
 import type { VideoItem } from '@/types/video'
 
@@ -35,6 +35,8 @@ const aiSummaryStatus = ref<'idle' | 'pending' | 'queued' | 'processing' | 'read
 const aiSummaryCached = ref(false)
 const aiSummaryProvider = ref('')
 const aiSummaryRetryCount = ref(0)
+const aiTags = ref<string[]>([])
+const aiTagsProvider = ref('')
 const transcriptText = ref('')
 const transcriptStatus = ref<'idle' | 'pending' | 'queued' | 'processing' | 'ready' | 'failed'>('idle')
 const transcriptLoading = ref(false)
@@ -52,6 +54,7 @@ const chatContainer = ref<HTMLElement | null>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
 let chatSocket: WebSocket | null = null
 let watchEventInterval: ReturnType<typeof setInterval> | null = null
+let aiTagsPollInterval: ReturnType<typeof setInterval> | null = null
 
 interface ChatMessage {
   type: 'chat_message' | 'system'
@@ -146,6 +149,13 @@ function stopRecordingWatchEvents() {
   if (watchEventInterval) {
     clearInterval(watchEventInterval)
     watchEventInterval = null
+  }
+}
+
+function stopAiTagsPolling() {
+  if (aiTagsPollInterval) {
+    clearInterval(aiTagsPollInterval)
+    aiTagsPollInterval = null
   }
 }
 
@@ -260,6 +270,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   closeChatSocket()
+  stopAiTagsPolling()
   stopRecordingWatchEvents()
 })
 
@@ -433,6 +444,31 @@ async function retryAiSummaryJob() {
   }
 }
 
+async function loadAiTags() {
+  if (!currentVideo.value) return
+  try {
+    const result = await fetchAiTags(currentVideo.value.id)
+    aiTags.value = result.tags || []
+    aiTagsProvider.value = result.provider || ''
+  } finally {
+    if (aiTags.value.length > 0) {
+      stopAiTagsPolling()
+    }
+  }
+}
+
+function startAiTagsPolling() {
+  stopAiTagsPolling()
+  let attempts = 0
+  aiTagsPollInterval = setInterval(async () => {
+    attempts += 1
+    await loadAiTags()
+    if (aiTags.value.length > 0 || transcriptStatus.value === 'failed' || attempts >= 20) {
+      stopAiTagsPolling()
+    }
+  }, 3000)
+}
+
 async function loadTranscript() {
   if (!currentVideo.value) return
 
@@ -473,6 +509,8 @@ watch(
     aiSummaryCached.value = false
     aiSummaryProvider.value = ''
     aiSummaryRetryCount.value = 0
+    aiTags.value = []
+    aiTagsProvider.value = ''
     transcriptText.value = ''
     transcriptStatus.value = 'idle'
     transcriptError.value = ''
@@ -481,6 +519,7 @@ watch(
     transcriptLanguage.value = ''
     transcriptUpdatedAt.value = ''
     transcriptExpanded.value = false
+    stopAiTagsPolling()
     stopRecordingWatchEvents()
     loadCurrentVideo()
   },
@@ -492,6 +531,8 @@ watch(
     connectChat()
     loadMySubscriptions()
     loadTranscript()
+    loadAiTags()
+    startAiTagsPolling()
   },
 )
 
@@ -581,6 +622,16 @@ watch(
         >
           {{ aiSummaryLoading ? 'Retrying...' : 'Retry Summary' }}
         </button>
+      </section>
+
+      <section v-if="aiTags.length > 0" class="transcript-card">
+        <header class="transcript-head">
+          <h2><AppIcon name="search" :size="14" /> AI Tags</h2>
+          <small class="ai-time" v-if="aiTagsProvider">{{ aiTagsProvider }}</small>
+        </header>
+        <div class="tag-list">
+          <span v-for="tag in aiTags" :key="tag" class="tag-chip">#{{ tag }}</span>
+        </div>
       </section>
 
       <section v-if="transcriptExpanded" class="transcript-card">
@@ -992,6 +1043,25 @@ h1 {
   font-size: 12px;
 }
 
+.tag-list {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(14, 116, 144, 0.2);
+  color: #bae6fd;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .btn-edit {
   background: #0ea5e9;
   color: var(--text-main);
@@ -1149,7 +1219,7 @@ h1 {
 }
 
 .chat-card {
-  margin-top: 14px;
+  margin-top: 0;
   border-radius: 12px;
   border: 1px solid var(--border-default);
   background: var(--bg-1);

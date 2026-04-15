@@ -15,7 +15,7 @@ def test_upload_video_success(client, test_db, sample_video_file, tmp_path):
                         "title": "My Test Video",
                         "description": "A great video",
                         "category": "Technology",
-                        "tags": "python, testing",
+                        "tags": "technology, education",
                         "uploader_id": 1,
                         "views": 5,
                         "likes": 2,
@@ -40,7 +40,25 @@ def test_upload_video_success(client, test_db, sample_video_file, tmp_path):
     videos = test_db.query(Video).all()
     assert len(videos) == 1
     assert videos[0].title == "My Test Video"
+    assert videos[0].tags == "technology,education"
     mock_notify.assert_awaited_once()
+
+
+def test_upload_rejects_non_canonical_tag(client, sample_video_file, tmp_path):
+    with patch("src.video_crud_service.videos.UPLOAD_DIR", tmp_path):
+        with patch("src.video_crud_service.videos._generate_first_frame_thumbnail", return_value=False):
+            response = client.post(
+                "/videos/upload",
+                data={
+                    "title": "Bad tags",
+                    "uploader_id": 1,
+                    "tags": "my-custom-tag",
+                },
+                files={"file": ("test.mp4", sample_video_file, "video/mp4")},
+            )
+
+    assert response.status_code == 400
+    assert "canonical options only" in response.json()["detail"]
 
 
 def test_upload_invalid_file_type(client):

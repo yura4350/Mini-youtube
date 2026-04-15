@@ -13,10 +13,18 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from src.video_crud_service.database import SessionLocal, init_db
-from src.video_crud_service.models import Video, VideoTranscript, VideoSummary
+from src.video_crud_service.models import (
+    Video,
+    VideoTranscript,
+    VideoSummary,
+    VideoTag,
+    TagTaxonomy,
+    TagAlias,
+)
 from src.video_crud_service.videos import serialize_video
 from src.communication_service.models import Notification
 from src.dashboard_service.models import SearchHistory, WatchHistory, Subscription
+from src.dashboard_service.tag_taxonomy import TAG_TAXONOMY_SEED
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,6 +32,7 @@ COMMUNICATION_API_BASE_URL = os.getenv("COMMUNICATION_API_BASE_URL", "").strip()
 INTELLIGENCE_API_BASE_URL = os.getenv("INTELLIGENCE_API_BASE_URL", "").strip().rstrip("/")
 SUMMARY_WAIT_TRANSCRIPT_SECONDS = int(os.getenv("SUMMARY_WAIT_TRANSCRIPT_SECONDS", "12"))
 SUMMARY_WAIT_TRANSCRIPT_POLL_SECONDS = float(os.getenv("SUMMARY_WAIT_TRANSCRIPT_POLL_SECONDS", "1.0"))
+TAG_LOW_CONFIDENCE_THRESHOLD = float(os.getenv("TAG_LOW_CONFIDENCE_THRESHOLD", "0.34"))
 
 app = FastAPI(title="Dashboard Service")
 
@@ -101,6 +110,11 @@ class SummarizeRequest(BaseModel):
     force_refresh: bool = Field(default=False)
 
 
+class TaggingRequest(BaseModel):
+    video_id: str = Field(..., min_length=1)
+    max_tags: int = Field(default=5, ge=1, le=10)
+
+
 def _clip_text(value: str, max_length: int) -> str:
     compact = " ".join(value.strip().split())
     if len(compact) <= max_length:
@@ -149,6 +163,193 @@ def _summarize_mvp(source_text: str, max_sentences: int) -> str:
 def _summary_input_hash(source_text: str, source_kind: str, max_sentences: int) -> str:
     material = f"{source_kind}|{max_sentences}|{source_text}".encode("utf-8")
     return hashlib.sha256(material).hexdigest()
+
+
+def _tags_mvp(source_text: str, max_tags: int, allowed_tags: list[str]) -> list[str]:
+    allowed = [_normalize_tag(t) for t in allowed_tags if _normalize_tag(t)]
+    if not allowed:
+        return []
+
+    normalized_text = source_text.lower()
+    scored: list[tuple[str, int]] = []
+    for tag in allowed:
+        parts = [p for p in tag.split("-") if len(p) >= 3]
+        score = sum(1 for p in parts if p in normalized_text)
+        scored.append((tag, score))
+
+    ranked = sorted(scored, key=lambda x: (-x[1], x[0]))
+    chosen = [tag for tag, score in ranked if score > 0][:max_tags]
+    if chosen:
+        return chosen
+    if "general" in allowed:
+        return ["general"]
+    return allowed[:max_tags]
+
+
+def _normalize_tag(value: str) -> str:
+    value = re.sub(r"[^a-zA-Z0-9\s-]", "", value).strip().lower()
+    value = re.sub(r"\s+", "-", value)
+    value = re.sub(r"-+", "-", value)
+    return value[:32].strip("-")
+
+
+def _ensure_tag_taxonomy_seed(db: Session) -> None:
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    seed_canonical = {_normalize_tag(key) for key in TAG_TAXONOMY_SEED.keys()}
+    db.query(TagTaxonomy).filter(~TagTaxonomy.canonical_tag.in_(seed_canonical)).update(
+        {TagTaxonomy.active: 0},
+        synchronize_session=False,
+    )
+
+    # Build a deterministic alias->canonical mapping in memory first so we never
+    # attempt duplicate alias inserts in a single transaction.
+    planned_alias_owner: dict[str, str] = {}
+    for canonical in TAG_TAXONOMY_SEED.keys():
+        canonical_norm = _normalize_tag(canonical)
+        if canonical_norm:
+            planned_alias_owner[canonical_norm] = canonical_norm
+
+    for canonical, meta in TAG_TAXONOMY_SEED.items():
+        canonical_norm = _normalize_tag(canonical)
+        if not canonical_norm:
+            continue
+        taxonomy_row = db.query(TagTaxonomy).filter(TagTaxonomy.canonical_tag == canonical_norm).first()
+        if taxonomy_row:
+            taxonomy_row.display_name = str(meta["display_name"])
+            taxonomy_row.category = str(meta["category"])
+            taxonomy_row.active = 1
+        else:
+            db.add(
+                TagTaxonomy(
+                    canonical_tag=canonical_norm,
+                    display_name=str(meta["display_name"]),
+                    category=str(meta["category"]),
+                    active=1,
+                    created_at=now,
+                )
+            )
+
+        for alias in meta.get("aliases", []):
+            alias_norm = _normalize_tag(str(alias))
+            if not alias_norm:
+                continue
+            # Canonical tag name keeps ownership of same-name alias.
+            if alias_norm in seed_canonical and alias_norm != canonical_norm:
+                continue
+            # First owner wins for ambiguous aliases in seed list.
+            planned_alias_owner.setdefault(alias_norm, canonical_norm)
+
+    existing_alias_rows = db.query(TagAlias).all()
+    existing_alias_map = {row.alias: row for row in existing_alias_rows if row.alias}
+
+    for alias_norm, canonical_norm in planned_alias_owner.items():
+        existing = existing_alias_map.get(alias_norm)
+        if existing:
+            if existing.canonical_tag != canonical_norm:
+                existing.canonical_tag = canonical_norm
+            continue
+        db.add(
+            TagAlias(
+                alias=alias_norm,
+                canonical_tag=canonical_norm,
+                created_at=now,
+            )
+        )
+
+    for alias_norm, row in existing_alias_map.items():
+        if alias_norm not in planned_alias_owner:
+            db.delete(row)
+    db.commit()
+
+
+def _active_canonical_tags(db: Session) -> list[str]:
+    rows = (
+        db.query(TagTaxonomy.canonical_tag)
+        .filter(TagTaxonomy.active == 1)
+        .order_by(TagTaxonomy.canonical_tag.asc())
+        .all()
+    )
+    return [row[0] for row in rows if row and row[0]]
+
+
+def _canonicalize_tags(db: Session, tags: list[str], max_tags: int) -> list[str]:
+    alias_rows = db.query(TagAlias).all()
+    taxonomy_rows = db.query(TagTaxonomy).filter(TagTaxonomy.active == 1).all()
+    active_set = {row.canonical_tag for row in taxonomy_rows}
+    alias_to_canonical = {row.alias: row.canonical_tag for row in alias_rows if row.alias and row.canonical_tag}
+
+    canonical_tags: list[str] = []
+    for raw in tags:
+        normalized = _normalize_tag(raw)
+        if not normalized:
+            continue
+        canonical = alias_to_canonical.get(normalized, "")
+        if not canonical and normalized in active_set:
+            canonical = normalized
+        if not canonical:
+            continue
+        if canonical not in canonical_tags:
+            canonical_tags.append(canonical)
+        if len(canonical_tags) >= max_tags:
+            break
+    return canonical_tags
+
+
+def _infer_primary_category(db: Session, canonical_tags: list[str]) -> str | None:
+    if not canonical_tags:
+        return None
+    rows = (
+        db.query(TagTaxonomy.canonical_tag, TagTaxonomy.category)
+        .filter(TagTaxonomy.active == 1)
+        .all()
+    )
+    tag_to_category = {row[0]: row[1] for row in rows if row and row[0] and row[1]}
+    counts: dict[str, int] = {}
+    for tag in canonical_tags:
+        category = tag_to_category.get(tag)
+        if not category:
+            continue
+        counts[category] = counts.get(category, 0) + 1
+    if not counts:
+        return None
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
+
+
+def _tag_confidence_scores(
+    db: Session,
+    *,
+    source_text: str,
+    title: str | None,
+    description: str | None,
+    canonical_tags: list[str],
+) -> dict[str, float]:
+    if not canonical_tags:
+        return {}
+    text = f"{title or ''}\n{description or ''}\n{source_text or ''}".lower()
+    alias_rows = (
+        db.query(TagAlias)
+        .filter(TagAlias.canonical_tag.in_(canonical_tags))
+        .all()
+    )
+    aliases_by_tag: dict[str, set[str]] = {tag: {tag} for tag in canonical_tags}
+    for row in alias_rows:
+        if row.canonical_tag in aliases_by_tag and row.alias:
+            aliases_by_tag[row.canonical_tag].add(row.alias)
+
+    scores: dict[str, float] = {}
+    for tag in canonical_tags:
+        score = 0.0
+        parts = [p for p in tag.split("-") if len(p) >= 3]
+        if parts:
+            part_hits = sum(1 for p in parts if p in text)
+            score += 0.4 * (part_hits / len(parts))
+        alias_hits = sum(1 for alias in aliases_by_tag.get(tag, set()) if alias and alias in text)
+        if alias_hits > 0:
+            score += min(0.5, 0.2 + 0.1 * alias_hits)
+        if tag in text:
+            score += 0.2
+        scores[tag] = min(1.0, score)
+    return scores
 
 
 def _serialize_summary_row(row: VideoSummary, *, cached: bool = False) -> dict:
@@ -272,6 +473,36 @@ def _proxy_ai_summarize_sync(payload: dict) -> dict | None:
         return None
 
 
+def _proxy_ai_tagging_sync(payload: dict) -> dict | None:
+    if not INTELLIGENCE_API_BASE_URL:
+        return None
+    try:
+        with httpx.Client(timeout=8.0) as client:
+            response = client.post(
+                f"{INTELLIGENCE_API_BASE_URL}/ai/tagging",
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()
+    except Exception:
+        logger.exception("Failed to proxy AI tagging synchronously to intelligence service")
+        return None
+
+
+def _replace_video_tags(db: Session, video_id: str, tags: list[str]) -> list[str]:
+    db.query(VideoTag).filter(VideoTag.video_id == video_id).delete(synchronize_session=False)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    normalized: list[str] = []
+    for tag in tags:
+        t = re.sub(r"[^a-z0-9-]", "", tag.strip().lower())[:32]
+        if not t or t in normalized:
+            continue
+        normalized.append(t)
+        db.add(VideoTag(video_id=video_id, tag=t, created_at=now))
+    db.commit()
+    return normalized
+
+
 def _run_summary_job(
     *,
     db_bind,
@@ -391,6 +622,11 @@ def _run_summary_job(
 @app.on_event("startup")
 def on_startup():
     init_db()
+    db = SessionLocal()
+    try:
+        _ensure_tag_taxonomy_seed(db)
+    finally:
+        db.close()
 
 
 @app.get("/health")
@@ -497,6 +733,123 @@ async def ai_summarize_retry(
         force_refresh=True,
     )
     return await ai_summarize(payload=payload, background_tasks=background_tasks, db=db)
+
+
+@app.post("/ai/tagging")
+def ai_tagging(payload: TaggingRequest, db: Session = Depends(get_db)):
+    _ensure_tag_taxonomy_seed(db)
+    allowed_tags = _active_canonical_tags(db)
+
+    video = db.query(Video).filter(Video.id == payload.video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    transcript_row = db.query(VideoTranscript).filter(VideoTranscript.video_id == video.id).first()
+    if not transcript_row or not (transcript_row.transcript_text or "").strip():
+        raise HTTPException(status_code=409, detail="Transcript not ready for tagging")
+
+    transcript_status = (transcript_row.status or "ready").strip().lower()
+    if transcript_status != "ready":
+        if transcript_status in {"queued", "processing", "pending"}:
+            raise HTTPException(status_code=409, detail="Transcript not ready for tagging")
+        raise HTTPException(status_code=409, detail="Transcript failed; cannot generate AI tags")
+
+    source_text = transcript_row.transcript_text.strip()
+    proxied = _proxy_ai_tagging_sync(
+        {
+            "video_id": video.id,
+            "source_text": source_text,
+            "title": video.title,
+            "description": video.description,
+            "source_category": video.category,
+            "max_tags": payload.max_tags,
+            "allowed_tags": allowed_tags,
+        }
+    )
+    provider = "intelligence_service"
+    raw_tags: list[str] = []
+    if proxied and isinstance(proxied.get("tags"), list):
+        raw_tags = [str(t) for t in proxied["tags"]]
+        provider = str(proxied.get("provider") or "intelligence_service")
+    if not raw_tags:
+        raw_tags = _tags_mvp(source_text, payload.max_tags, allowed_tags)
+        provider = "dashboard_fallback"
+
+    canonical_tags = _canonicalize_tags(db, raw_tags, payload.max_tags)
+    if not canonical_tags:
+        canonical_tags = _canonicalize_tags(
+            db,
+            _tags_mvp(source_text, payload.max_tags * 2, allowed_tags),
+            payload.max_tags,
+        )
+        provider = "dashboard_fallback"
+
+    confidence_scores = _tag_confidence_scores(
+        db,
+        source_text=source_text,
+        title=video.title,
+        description=video.description,
+        canonical_tags=canonical_tags[: payload.max_tags],
+    )
+    max_confidence = max(confidence_scores.values()) if confidence_scores else 0.0
+    primary_category = _infer_primary_category(db, canonical_tags[: payload.max_tags])
+    confidence_mode = "normal"
+    tags_to_store = canonical_tags[: payload.max_tags]
+    if max_confidence < TAG_LOW_CONFIDENCE_THRESHOLD:
+        # Low-confidence case: return only coarse category and avoid noisy fine-grained tags.
+        tags_to_store = []
+        confidence_mode = "low_confidence_category_only"
+
+    stored_tags = _replace_video_tags(db, video.id, tags_to_store)
+    return {
+        "video_id": video.id,
+        "tags": stored_tags,
+        "primary_category": primary_category,
+        "provider": provider,
+        "confidence_mode": confidence_mode,
+        "max_confidence": round(max_confidence, 3),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/ai/tags/{video_id}")
+def ai_tags(video_id: str, db: Session = Depends(get_db)):
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    rows = (
+        db.query(VideoTag)
+        .filter(VideoTag.video_id == video_id)
+        .order_by(VideoTag.created_at.desc(), VideoTag.tag.asc())
+        .all()
+    )
+    return {
+        "video_id": video_id,
+        "tags": [row.tag for row in rows],
+        "primary_category": _infer_primary_category(db, [row.tag for row in rows]) or _normalize_tag(video.category),
+    }
+
+
+@app.get("/ai/tag-taxonomy")
+def ai_tag_taxonomy(db: Session = Depends(get_db)):
+    _ensure_tag_taxonomy_seed(db)
+    rows = (
+        db.query(TagTaxonomy)
+        .filter(TagTaxonomy.active == 1)
+        .order_by(TagTaxonomy.category.asc(), TagTaxonomy.display_name.asc())
+        .all()
+    )
+    return {
+        "tags": [
+            {
+                "canonical_tag": row.canonical_tag,
+                "display_name": row.display_name,
+                "category": row.category,
+            }
+            for row in rows
+        ]
+    }
 
 
 @app.get("/search")

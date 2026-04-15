@@ -30,6 +30,7 @@ services:
       DATABASE_URL: postgresql://media_user:media_pass@db:5432/media_db
       PYTHONUNBUFFERED: "1"
       COMMUNICATION_API_BASE_URL: http://communication:8002
+      DASHBOARD_API_BASE_URL: http://dashboard:8004
       ASR_ENABLED: "true"
       ASR_MODEL_SIZE: "tiny"
       ASR_COMPUTE_TYPE: "int8"

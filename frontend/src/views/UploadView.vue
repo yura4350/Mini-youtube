@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { uploadVideo } from '@/services/videos'
 import { toApiUploaderId } from '@/services/user-id'
+import { fetchAiTagTaxonomy, type AiTagTaxonomyItem } from '@/services/intelligence'
 
 const authStore = useAuthStore()
 const loading = ref(false)
@@ -11,13 +12,44 @@ const successMessage = ref('')
 const errorMessage = ref('')
 const selectedFile = ref<File | null>(null)
 const videoDuration = ref<number>(0)
+const tagOptions = ref<AiTagTaxonomyItem[]>([])
+const tagLoading = ref(false)
+const selectedCanonicalTags = ref<string[]>([])
 
 const form = reactive({
   title: '',
   description: '',
   category: 'Education',
-  tags: '',
 })
+
+const tagsByCategory = computed<Record<string, AiTagTaxonomyItem[]>>(() => {
+  const grouped: Record<string, AiTagTaxonomyItem[]> = {}
+  for (const tag of tagOptions.value) {
+    if (!grouped[tag.category]) grouped[tag.category] = []
+    grouped[tag.category].push(tag)
+  }
+  return grouped
+})
+
+async function loadTagTaxonomy() {
+  tagLoading.value = true
+  try {
+    const result = await fetchAiTagTaxonomy()
+    tagOptions.value = result.tags || []
+  } catch {
+    tagOptions.value = []
+  } finally {
+    tagLoading.value = false
+  }
+}
+
+function toggleTag(canonicalTag: string) {
+  if (selectedCanonicalTags.value.includes(canonicalTag)) {
+    selectedCanonicalTags.value = selectedCanonicalTags.value.filter((v) => v !== canonicalTag)
+    return
+  }
+  selectedCanonicalTags.value = [...selectedCanonicalTags.value, canonicalTag]
+}
 
 function onFileChange(event: Event) {
   const target = event.target as HTMLInputElement
@@ -60,7 +92,7 @@ async function onSubmit() {
       title: form.title,
       description: form.description,
       category: form.category,
-      tags: form.tags,
+      tags: selectedCanonicalTags.value.join(','),
       uploaderId,
       durationSeconds: videoDuration.value,
     })
@@ -69,7 +101,7 @@ async function onSubmit() {
     form.title = ''
     form.description = ''
     form.category = 'Education'
-    form.tags = ''
+    selectedCanonicalTags.value = []
     selectedFile.value = null
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Upload failed.'
@@ -77,6 +109,10 @@ async function onSubmit() {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  void loadTagTaxonomy()
+})
 </script>
 
 <template>
@@ -84,6 +120,10 @@ async function onSubmit() {
     <section class="upload-card">
       <h1><AppIcon name="upload" :size="22" /> Upload video</h1>
       <p class="sub">Upload a video file and metadata to the Video CRUD service.</p>
+      <p class="subtle-note">
+        If you select tags manually, AI auto-tagging will be skipped for this upload. If you leave tags empty, AI
+        will generate tags automatically from your video transcript.
+      </p>
 
       <form class="form" @submit.prevent="onSubmit">
         <label>
@@ -115,11 +155,33 @@ async function onSubmit() {
         </label>
 
         <label>
-          Tags
-          <input v-model="form.tags" type="text" placeholder="tutorial, tech, guide" />
+          Canonical tags (optional, leave empty for AI auto-generation)
+          <div class="tag-box">
+            <p v-if="tagLoading" class="muted-mini">Loading canonical tags...</p>
+            <template v-else>
+              <div v-if="tagOptions.length === 0" class="muted-mini">
+                Tag list is unavailable now. You can still upload without manual tags.
+              </div>
+              <div v-for="(items, category) in tagsByCategory" :key="category" class="tag-group">
+                <div class="tag-category">{{ category }}</div>
+                <div class="tag-grid">
+                  <button
+                    v-for="item in items"
+                    :key="item.canonical_tag"
+                    type="button"
+                    class="tag-chip"
+                    :class="{ active: selectedCanonicalTags.includes(item.canonical_tag) }"
+                    @click="toggleTag(item.canonical_tag)"
+                  >
+                    {{ item.display_name }}
+                  </button>
+                </div>
+              </div>
+            </template>
+          </div>
         </label>
 
-        <button :disabled="loading" type="submit">
+        <button :disabled="loading" type="submit" class="submit-btn">
           <AppIcon name="upload" :size="15" /> {{ loading ? 'Uploading...' : 'Upload Video' }}
         </button>
       </form>
@@ -162,6 +224,13 @@ h1 {
   margin-top: 2px;
 }
 
+.subtle-note {
+  margin-top: 8px;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .form {
   margin-top: 18px;
   display: grid;
@@ -185,7 +254,7 @@ select {
   padding: 10px 12px;
 }
 
-button {
+.submit-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -197,6 +266,57 @@ button {
   color: var(--text-inverse);
   background: linear-gradient(135deg, var(--accent), var(--accent-soft));
   font-weight: 600;
+  cursor: pointer;
+}
+
+.submit-btn:disabled {
+  cursor: not-allowed;
+}
+
+.tag-box {
+  background: #0f0f0f;
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.muted-mini {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.tag-group + .tag-group {
+  margin-top: 10px;
+}
+
+.tag-category {
+  font-size: 12px;
+  color: #9ca3af;
+  text-transform: capitalize;
+  margin-bottom: 6px;
+}
+
+.tag-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-chip {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #171717;
+  color: #e5e7eb;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tag-chip.active {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
 }
 
 .ok {
