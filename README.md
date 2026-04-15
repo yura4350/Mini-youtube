@@ -110,6 +110,22 @@ docker-compose logs -f video  # Specific service (video, admin, communication, e
   - `ASR_COMPUTE_TYPE=int8`
 - The Docker build installs ASR dependencies only when `INSTALL_ASR_DEPS=1` is set (already configured for `video` service).
 
+#### Real AI Summary (OpenAI)
+
+- The `intelligence` service supports real LLM summarization via OpenAI.
+- Setup:
+  - `cp .env.example .env`
+  - Fill your own key and model in `.env`.
+- Configure these environment variables before `docker compose up`:
+  - `OPENAI_API_KEY=your_key_here`
+  - `OPENAI_SUMMARY_MODEL=gpt-4o-mini` (or your preferred model)
+  - Optional:
+    - `OPENAI_SUMMARY_ENABLED=true`
+    - `OPENAI_SUMMARY_MAX_OUTPUT_TOKENS=220`
+- If `OPENAI_API_KEY` is missing or the OpenAI call fails, the service automatically falls back to rules-based summary.
+- Quick check:
+  - `GET /ai/health` on intelligence service returns `provider: openai` when configured.
+
 Main class: `src/video_crud_service/main.py`, `src/admin_service/main.py`, etc.
 
 Data files needed: Database is auto-initialized by PostgreSQL container

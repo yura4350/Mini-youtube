@@ -68,6 +68,38 @@ def _ensure_video_transcript_schema() -> None:
         for statement in statements:
             connection.execute(statement)
 
+
+def _ensure_video_summary_schema() -> None:
+    inspector = inspect(engine)
+    if "video_summaries" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("video_summaries")}
+    required_columns = {
+        "status": "VARCHAR NOT NULL DEFAULT 'queued'",
+        "summary": "VARCHAR",
+        "source_kind": "VARCHAR NOT NULL DEFAULT 'video_metadata'",
+        "provider": "VARCHAR",
+        "error_message": "VARCHAR",
+        "input_hash": "VARCHAR",
+        "max_sentences": "INTEGER NOT NULL DEFAULT 3",
+        "retry_count": "INTEGER NOT NULL DEFAULT 0",
+        "duration_ms": "INTEGER",
+        "generated_at": "TIMESTAMP",
+    }
+
+    statements = []
+    for column_name, column_definition in required_columns.items():
+        if column_name not in existing_columns:
+            statements.append(text(f"ALTER TABLE video_summaries ADD COLUMN {column_name} {column_definition}"))
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(statement)
+
 def get_db():
     db = SessionLocal()
     try:
@@ -82,6 +114,7 @@ def init_db(max_retries: int = 30, retry_delay_seconds: int = 2):
             Base.metadata.create_all(bind=engine)
             _ensure_video_schema()
             _ensure_video_transcript_schema()
+            _ensure_video_summary_schema()
             return
         except OperationalError as exc:
             last_error = exc
