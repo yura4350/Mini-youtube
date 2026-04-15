@@ -116,6 +116,19 @@ class UserPreferencesUpdate(BaseModel):
     notifications: Optional[bool] = None
     ui_theme: Optional[str] = None
 
+# Function to return user preferences (or create them with default valuesif they don't exist)
+def _get_or_create_user_preferences(db: Session, user_id: int) -> UserPreferences:
+    user_prefs = db.quert(UserPreferences).filter(UserPreferences.user_id == user_id).first()
+
+    # Create new preferences if they don't exist
+    if not user_prefs:
+        user_prefs = UserPreferences(user_id=user_id)
+        db.add(user_prefs)
+        db.commit()
+        db.refresh(user_prefs)
+
+    return user_prefs
+
 # Security Functions
 def verify_pwd(plain_pwd: str, hashed_pwd: str) -> bool:
     return pwd_context.verify(plain_pwd, hashed_pwd)
@@ -229,7 +242,9 @@ from src.user_prefs_and_accounts_service.avatars import router as avatars_router
 
 app.include_router(avatars_router)
 
+### USER TABLE RELATED ENDPOINTS ###
 
+# Health Check Endpoint
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "user-accounts-prefs"}
@@ -370,6 +385,13 @@ def delete(user_id:int, current_user:User = Depends(get_current_active_user), db
 @app.get("/users/", response_model=List[UserResponse])
 def get_all_users(current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
     return db.query(User).all()
+
+### USER PREFERENCES TABLE RELATED ENDPOINTS ###
+# Get user's own preferences
+@app.get("/user/preferences", response_model=UserPreferencesResponse)
+def get_user_preferences(current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
+    user_prefs = _get_or_create_user_preferences(db, current_user.id)
+    return user_prefs
 
 
 
