@@ -98,7 +98,7 @@ services:
       db:
         condition: service_healthy
     env_file:
-      - ./src/user_prefs_and_accounts_service/.env.docker
+      - ./src/user_prefs_and_accounts_service/.env
     environment:
       DATABASE_URL: postgresql://media_user:media_pass@db:5432/media_db
       PYTHONUNBUFFERED: "1"
