@@ -118,8 +118,65 @@
 
 ## Summary of Issues Found (combined and expressed as tasks)
 
-- Task #1, Severity
+- Task #1, Severity: Low
+  - Go to user profile from chat
 
-- Task #2, Severity
+- Task #2, Severity: High
+  - User should be equivalent to channel
 
-- Task #3, Severity
+- Task #3, Severity: High
+  - Map video to user profile
+
+- Task #4, Severity: High
+  - Weak email verification
+
+- Task #4, Severity: High
+  - User's video should not appear on dashboard
+
+- Task #5, Severity: High
+  - Username should appear correctly (not Uploader X)
+
+- Task #6, Severity: High
+  - Password strength (lowercase/uppercase, number, symbol), option to view password
+
+- Task #7, Severity: High
+ - Search history not being reflected in search bar
+
+- Task #8, Severity: Low
+  - Login should navigate to home screen
+
+- Task #9, Severity: Low
+  - Fix UI after video upload
+
+- Task #10, Severity: High
+  - Video cache needs to be cleared after upload
+
+- Task #11, Severity: High
+  - Subscribes to video, not channel
+
+- Task #12, Severity: Low
+  - Light/Dark mode not correctly reflected in UI
+
+- Task #13, Severity: High
+  - Total number of subscribers not appearing properly in profiles page
+
+- Task #14, Severity: Low
+  - Create a page of list of subscribers
+
+- Task #15, Severity: Low
+  - Change default avatar
+
+- Task #16, Severity: High
+  - Avatar update should be reflected everywhere
+
+- Task #17, Severity: Low
+  - Make user communication (chat) intuitive on UI
+
+- Task #18, Severity: High
+  - Missing asterisk indicator for madatory fields on video upload
+
+- Task #19, Severity: High
+  - Video delete not working
+
+- Task #20, Severity: High
+  - Update video title doesn't work
