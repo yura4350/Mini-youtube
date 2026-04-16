@@ -7,7 +7,7 @@ import { formatViews } from '@/services/video-format'
 import { fetchVideoById, fetchVideoTranscript, fetchVideos, updateVideo, deleteVideo } from '@/services/videos'
 import { toApiUploaderId } from '@/services/user-id'
 import { recordWatchEvent, fetchSubscribedChannelIds, subscribeToChannel, unsubscribeFromChannel } from '@/services/dashboard'
-import { summarizeVideo, fetchAiSummaryStatus, retryAiSummary } from '@/services/intelligence'
+import { summarizeVideo, fetchAiSummaryStatus, retryAiSummary, fetchAiTags } from '@/services/intelligence'
 import { useAuthStore } from '@/stores/auth'
 import type { VideoItem } from '@/types/video'
 
@@ -35,6 +35,9 @@ const aiSummaryStatus = ref<'idle' | 'pending' | 'queued' | 'processing' | 'read
 const aiSummaryCached = ref(false)
 const aiSummaryProvider = ref('')
 const aiSummaryRetryCount = ref(0)
+const aiSummaryExpanded = ref(false)
+const aiTags = ref<string[]>([])
+const aiTagsProvider = ref('')
 const transcriptText = ref('')
 const transcriptStatus = ref<'idle' | 'pending' | 'queued' | 'processing' | 'ready' | 'failed'>('idle')
 const transcriptLoading = ref(false)
@@ -52,6 +55,7 @@ const chatContainer = ref<HTMLElement | null>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
 let chatSocket: WebSocket | null = null
 let watchEventInterval: ReturnType<typeof setInterval> | null = null
+let aiTagsPollInterval: ReturnType<typeof setInterval> | null = null
 
 interface ChatMessage {
   type: 'chat_message' | 'system'
@@ -146,6 +150,13 @@ function stopRecordingWatchEvents() {
   if (watchEventInterval) {
     clearInterval(watchEventInterval)
     watchEventInterval = null
+  }
+}
+
+function stopAiTagsPolling() {
+  if (aiTagsPollInterval) {
+    clearInterval(aiTagsPollInterval)
+    aiTagsPollInterval = null
   }
 }
 
@@ -260,6 +271,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   closeChatSocket()
+  stopAiTagsPolling()
   stopRecordingWatchEvents()
 })
 
@@ -372,6 +384,7 @@ async function toggleSubscription() {
 async function generateAiSummary() {
   if (!currentVideo.value) return
 
+  aiSummaryExpanded.value = true
   aiSummaryLoading.value = true
   aiSummaryError.value = ''
   aiSummaryStatus.value = 'queued'
@@ -415,6 +428,16 @@ async function generateAiSummary() {
   }
 }
 
+async function toggleAiSummaryPanel() {
+  aiSummaryExpanded.value = !aiSummaryExpanded.value
+  if (!aiSummaryExpanded.value) {
+    return
+  }
+  if (!aiSummary.value && !aiSummaryLoading.value && aiSummaryStatus.value === 'idle') {
+    await generateAiSummary()
+  }
+}
+
 async function retryAiSummaryJob() {
   if (!currentVideo.value) return
   aiSummaryLoading.value = true
@@ -431,6 +454,31 @@ async function retryAiSummaryJob() {
   } finally {
     aiSummaryLoading.value = false
   }
+}
+
+async function loadAiTags() {
+  if (!currentVideo.value) return
+  try {
+    const result = await fetchAiTags(currentVideo.value.id)
+    aiTags.value = result.tags || []
+    aiTagsProvider.value = result.provider || ''
+  } finally {
+    if (aiTags.value.length > 0) {
+      stopAiTagsPolling()
+    }
+  }
+}
+
+function startAiTagsPolling() {
+  stopAiTagsPolling()
+  let attempts = 0
+  aiTagsPollInterval = setInterval(async () => {
+    attempts += 1
+    await loadAiTags()
+    if (aiTags.value.length > 0 || transcriptStatus.value === 'failed' || attempts >= 20) {
+      stopAiTagsPolling()
+    }
+  }, 3000)
 }
 
 async function loadTranscript() {
@@ -473,6 +521,9 @@ watch(
     aiSummaryCached.value = false
     aiSummaryProvider.value = ''
     aiSummaryRetryCount.value = 0
+    aiSummaryExpanded.value = false
+    aiTags.value = []
+    aiTagsProvider.value = ''
     transcriptText.value = ''
     transcriptStatus.value = 'idle'
     transcriptError.value = ''
@@ -481,6 +532,7 @@ watch(
     transcriptLanguage.value = ''
     transcriptUpdatedAt.value = ''
     transcriptExpanded.value = false
+    stopAiTagsPolling()
     stopRecordingWatchEvents()
     loadCurrentVideo()
   },
@@ -492,6 +544,8 @@ watch(
     connectChat()
     loadMySubscriptions()
     loadTranscript()
+    loadAiTags()
+    startAiTagsPolling()
   },
 )
 
@@ -531,9 +585,9 @@ watch(
           <AppIcon name="users" :size="14" />
           {{ subscribeLoading ? 'Updating...' : isSubscribed ? 'Unsubscribe' : 'Subscribe' }}
         </button>
-        <button @click="generateAiSummary" :disabled="aiSummaryLoading" class="btn-ai-summary" :class="{ loading: aiSummaryLoading }">
+        <button @click="toggleAiSummaryPanel" :disabled="aiSummaryLoading" class="btn-ai-summary" :class="{ loading: aiSummaryLoading }">
           <AppIcon name="search" :size="14" />
-          {{ aiSummaryLoading ? 'Generating summary...' : 'AI Summary' }}
+          {{ aiSummaryLoading ? 'Generating summary...' : aiSummaryExpanded ? 'Hide Summary' : 'AI Summary' }}
         </button>
         <button @click="toggleTranscriptPanel" class="btn-transcript">
           <AppIcon name="search" :size="14" />
@@ -550,24 +604,33 @@ watch(
       <p v-if="aiSummaryError" class="subscribe-error">{{ aiSummaryError }}</p>
       <p v-if="transcriptError" class="subscribe-error">{{ transcriptError }}</p>
 
-      <section
-        v-if="aiSummaryLoading || aiSummary || aiSummaryStatus === 'queued' || aiSummaryStatus === 'processing' || aiSummaryStatus === 'failed'"
-        class="ai-summary-card"
-      >
+      <section v-if="aiSummaryExpanded" class="ai-summary-card">
         <header class="ai-summary-head">
           <h2><AppIcon name="search" :size="14" /> AI Summary</h2>
-          <div class="ai-summary-meta" v-if="aiSummary">
-            <span class="ai-chip">{{ aiSummarySource === 'subtitle_text' ? 'Subtitles' : 'Metadata' }}</span>
-            <small class="ai-time">{{ new Date(aiSummaryGeneratedAt).toLocaleString() }}</small>
+          <div class="transcript-actions">
+            <button class="transcript-refresh" :disabled="aiSummaryLoading" @click="generateAiSummary">
+              {{ aiSummaryLoading ? 'Refreshing...' : (aiSummary ? 'Regenerate' : 'Generate') }}
+            </button>
+            <button class="transcript-refresh" @click="aiSummaryExpanded = false">Close</button>
           </div>
         </header>
-        <p v-if="aiSummaryLoading || aiSummaryStatus === 'queued' || aiSummaryStatus === 'processing'" class="ai-summary-placeholder">
+        <div class="ai-summary-meta" v-if="aiSummary">
+          <span class="ai-chip">{{ aiSummarySource === 'subtitle_text' ? 'Subtitles' : 'Metadata' }}</span>
+          <small class="ai-time">{{ new Date(aiSummaryGeneratedAt).toLocaleString() }}</small>
+        </div>
+        <p
+          v-if="aiSummaryLoading || aiSummaryStatus === 'queued' || aiSummaryStatus === 'processing'"
+          class="ai-summary-placeholder"
+        >
           Crafting a concise summary...
         </p>
         <p v-else-if="aiSummaryStatus === 'failed'" class="transcript-failed">
           AI summary failed. {{ aiSummaryError || 'Please retry.' }}
         </p>
-        <p v-else class="ai-summary-text">{{ aiSummary }}</p>
+        <p v-else-if="aiSummary" class="ai-summary-text">{{ aiSummary }}</p>
+        <p v-else class="transcript-note">
+          No AI summary yet. Click Generate to create one.
+        </p>
         <small v-if="aiSummary" class="ai-time">
           <span v-if="aiSummaryCached">Cached</span>
           <span v-if="aiSummaryProvider"> • {{ aiSummaryProvider }}</span>
@@ -581,6 +644,16 @@ watch(
         >
           {{ aiSummaryLoading ? 'Retrying...' : 'Retry Summary' }}
         </button>
+      </section>
+
+      <section v-if="aiTags.length > 0" class="transcript-card">
+        <header class="transcript-head">
+          <h2><AppIcon name="search" :size="14" /> AI Tags</h2>
+          <small class="ai-time" v-if="aiTagsProvider">{{ aiTagsProvider }}</small>
+        </header>
+        <div class="tag-list">
+          <span v-for="tag in aiTags" :key="tag" class="tag-chip">#{{ tag }}</span>
+        </div>
       </section>
 
       <section v-if="transcriptExpanded" class="transcript-card">
@@ -992,6 +1065,25 @@ h1 {
   font-size: 12px;
 }
 
+.tag-list {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(14, 116, 144, 0.2);
+  color: #bae6fd;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .btn-edit {
   background: #0ea5e9;
   color: var(--text-main);
@@ -1149,7 +1241,7 @@ h1 {
 }
 
 .chat-card {
-  margin-top: 14px;
+  margin-top: 0;
   border-radius: 12px;
   border: 1px solid var(--border-default);
   background: var(--bg-1);

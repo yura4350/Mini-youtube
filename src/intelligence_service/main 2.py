@@ -16,12 +16,11 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "").strip()
 OPENAI_SUMMARY_MODEL = os.getenv("OPENAI_SUMMARY_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
 OPENAI_TAG_MODEL = os.getenv("OPENAI_TAG_MODEL", OPENAI_SUMMARY_MODEL).strip() or OPENAI_SUMMARY_MODEL
 OPENAI_SUMMARY_MAX_OUTPUT_TOKENS = int(os.getenv("OPENAI_SUMMARY_MAX_OUTPUT_TOKENS", "220"))
-OPENAI_SUMMARY_MAX_CHARS = int(os.getenv("OPENAI_SUMMARY_MAX_CHARS", "2000"))
 OPENAI_SUMMARY_ENABLED = os.getenv("OPENAI_SUMMARY_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://vcm-52527.vm.duke.edu:5173", "http://vcm-52418.vm.duke.edu:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -58,7 +57,7 @@ def _summarize_mvp(source_text: str, max_sentences: int) -> str:
     chosen = sentence_candidates[:max_sentences]
     if not chosen:
         chosen = [_clip_text(normalized, 220)]
-    return _clip_text(" ".join(chosen), OPENAI_SUMMARY_MAX_CHARS)
+    return _clip_text(" ".join(chosen), 500)
 
 
 def _normalize_tag(value: str) -> str:
@@ -108,7 +107,7 @@ def _openai_summarize(source_text: str, max_sentences: int, source_kind: str) ->
         "Rules:\n"
         "1) Be faithful to source; do not invent details.\n"
         "2) Plain English only, no markdown, no bullet points.\n"
-        f"3) Output at most {max_sentences} sentence(s).\n"
+        f"3) Output at most {max_sentences} sentence(s), under 500 characters.\n"
         "4) Keep the most informative points first.\n"
         "5) If source is weak, state uncertainty briefly instead of hallucinating."
     )
@@ -127,7 +126,7 @@ def _openai_summarize(source_text: str, max_sentences: int, source_kind: str) ->
         output_text = getattr(response, "output_text", None)
         if not output_text or not str(output_text).strip():
             return None
-        return _clip_text(str(output_text), OPENAI_SUMMARY_MAX_CHARS)
+        return _clip_text(str(output_text), 500)
     except Exception:
         logger.exception("OpenAI summarize request failed, using rules fallback")
         return None

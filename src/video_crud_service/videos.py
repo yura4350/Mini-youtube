@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from src.dashboard_service.models import Subscription
+from src.dashboard_service.tag_taxonomy import canonical_seed_tags, normalize_tag
 from .models import Video, VideoTranscript
 from .database import SessionLocal
 
@@ -22,6 +23,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 THUMBNAIL_DIR = UPLOAD_DIR / "thumbnails"
 THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
 COMMUNICATION_API_BASE_URL = os.getenv("COMMUNICATION_API_BASE_URL", "").strip().rstrip("/")
+DASHBOARD_API_BASE_URL = os.getenv("DASHBOARD_API_BASE_URL", "").strip().rstrip("/")
 MAX_NOTIFICATION_MESSAGE_LENGTH = 180
 ASR_ENABLED = os.getenv("ASR_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
 ASR_MODEL_SIZE = os.getenv("ASR_MODEL_SIZE", "tiny").strip() or "tiny"
@@ -31,6 +33,23 @@ MAX_TRANSCRIPT_CHARS = 20000
 
 def _split_tags(tags: str) -> list[str]:
     return [tag.strip() for tag in tags.split(",") if tag.strip()]
+
+
+def _canonicalize_user_selected_tags(tags: str) -> list[str]:
+    allowed = set(canonical_seed_tags())
+    selected: list[str] = []
+    for raw in tags.split(","):
+        normalized = normalize_tag(raw)
+        if not normalized:
+            continue
+        if normalized not in allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid tag '{raw.strip()}'. Please select tags from canonical options only.",
+            )
+        if normalized not in selected:
+            selected.append(normalized)
+    return selected
 
 
 def _thumbnail_path(video_id: str) -> Path:
@@ -157,7 +176,7 @@ def _best_effort_update_transcript(
         db.close()
 
 
-def _generate_and_store_transcript_for_video(video_id: str, video_path: str) -> None:
+def _generate_and_store_transcript_for_video(video_id: str, video_path: str, should_auto_tag: bool = True) -> None:
     _best_effort_update_transcript(
         video_id=video_id,
         transcript_text="",
@@ -199,6 +218,28 @@ def _generate_and_store_transcript_for_video(video_id: str, video_path: str) -> 
         error_message=None,
         language=language,
     )
+    if should_auto_tag:
+        _trigger_ai_tagging(video_id)
+
+
+def _trigger_ai_tagging(video_id: str) -> None:
+    if not DASHBOARD_API_BASE_URL:
+        return
+    try:
+        with httpx.Client(timeout=4.0) as client:
+            response = client.post(
+                f"{DASHBOARD_API_BASE_URL}/ai/tagging",
+                json={"video_id": video_id, "max_tags": 5},
+            )
+            if response.status_code >= 400:
+                logger.info(
+                    "AI tagging trigger returned status=%s for video_id=%s",
+                    response.status_code,
+                    video_id,
+                )
+    except Exception:
+        # Tags are best-effort and should never break upload/transcript flow.
+        logger.exception("Failed to trigger AI tagging for video_id=%s", video_id)
 
 
 def serialize_video(video: Video) -> dict:
@@ -318,13 +359,16 @@ async def upload_video(
     generated = _generate_first_frame_thumbnail(saved_path, _thumbnail_path(video_id))
     resolved_thumbnail_url = f"/videos/{video_id}/thumbnail" if generated else thumbnail_url
 
+    selected_tags = _canonicalize_user_selected_tags(tags)
+    stored_tags = ",".join(selected_tags)
+
     # Save to database
     video = Video(
         id=video_id,
         title=title,
         description=description,
         category=category,
-        tags=tags,
+        tags=stored_tags,
         thumbnail_url=resolved_thumbnail_url,
         uploader_id=uploader_id,
         original_filename=file.filename,
@@ -349,7 +393,12 @@ async def upload_video(
             error_message=None,
             language=None,
         )
-        background_tasks.add_task(_generate_and_store_transcript_for_video, video.id, str(saved_path))
+        background_tasks.add_task(
+            _generate_and_store_transcript_for_video,
+            video.id,
+            str(saved_path),
+            len(selected_tags) == 0,
+        )
     else:
         _upsert_video_transcript(
             db,

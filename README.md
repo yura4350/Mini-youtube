@@ -140,6 +140,12 @@ docker-compose logs -f video  # Specific service (video, admin, communication, e
 - Quick check:
   - `GET /ai/health` on intelligence service returns `provider: openai` when configured.
 
+#### AI Tag Taxonomy
+
+- Canonical tag design and generation flow are documented in:
+  - `doc/AI_TAG_TAXONOMY.md`
+- AI tag generation is constrained by active canonical tags (instead of free-form tags), then stored in `video_tags`.
+
 Main class: `src/video_crud_service/main.py`, `src/admin_service/main.py`, etc.
 
 Data files needed: Database is auto-initialized by PostgreSQL container
