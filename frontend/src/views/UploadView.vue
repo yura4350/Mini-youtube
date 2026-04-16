@@ -25,8 +25,10 @@ const form = reactive({
 const tagsByCategory = computed<Record<string, AiTagTaxonomyItem[]>>(() => {
   const grouped: Record<string, AiTagTaxonomyItem[]> = {}
   for (const tag of tagOptions.value) {
-    if (!grouped[tag.category]) grouped[tag.category] = []
-    grouped[tag.category].push(tag)
+    const category = tag.category
+    const list = grouped[category] ?? []
+    list.push(tag)
+    grouped[category] = list
   }
   return grouped
 })
