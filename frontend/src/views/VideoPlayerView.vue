@@ -35,6 +35,7 @@ const aiSummaryStatus = ref<'idle' | 'pending' | 'queued' | 'processing' | 'read
 const aiSummaryCached = ref(false)
 const aiSummaryProvider = ref('')
 const aiSummaryRetryCount = ref(0)
+const aiSummaryExpanded = ref(false)
 const aiTags = ref<string[]>([])
 const aiTagsProvider = ref('')
 const transcriptText = ref('')
@@ -383,6 +384,7 @@ async function toggleSubscription() {
 async function generateAiSummary() {
   if (!currentVideo.value) return
 
+  aiSummaryExpanded.value = true
   aiSummaryLoading.value = true
   aiSummaryError.value = ''
   aiSummaryStatus.value = 'queued'
@@ -423,6 +425,16 @@ async function generateAiSummary() {
     aiSummaryError.value = error instanceof Error ? error.message : 'Failed to generate AI summary.'
   } finally {
     aiSummaryLoading.value = false
+  }
+}
+
+async function toggleAiSummaryPanel() {
+  aiSummaryExpanded.value = !aiSummaryExpanded.value
+  if (!aiSummaryExpanded.value) {
+    return
+  }
+  if (!aiSummary.value && !aiSummaryLoading.value && aiSummaryStatus.value === 'idle') {
+    await generateAiSummary()
   }
 }
 
@@ -509,6 +521,7 @@ watch(
     aiSummaryCached.value = false
     aiSummaryProvider.value = ''
     aiSummaryRetryCount.value = 0
+    aiSummaryExpanded.value = false
     aiTags.value = []
     aiTagsProvider.value = ''
     transcriptText.value = ''
@@ -572,9 +585,9 @@ watch(
           <AppIcon name="users" :size="14" />
           {{ subscribeLoading ? 'Updating...' : isSubscribed ? 'Unsubscribe' : 'Subscribe' }}
         </button>
-        <button @click="generateAiSummary" :disabled="aiSummaryLoading" class="btn-ai-summary" :class="{ loading: aiSummaryLoading }">
+        <button @click="toggleAiSummaryPanel" :disabled="aiSummaryLoading" class="btn-ai-summary" :class="{ loading: aiSummaryLoading }">
           <AppIcon name="search" :size="14" />
-          {{ aiSummaryLoading ? 'Generating summary...' : 'AI Summary' }}
+          {{ aiSummaryLoading ? 'Generating summary...' : aiSummaryExpanded ? 'Hide Summary' : 'AI Summary' }}
         </button>
         <button @click="toggleTranscriptPanel" class="btn-transcript">
           <AppIcon name="search" :size="14" />
@@ -591,24 +604,33 @@ watch(
       <p v-if="aiSummaryError" class="subscribe-error">{{ aiSummaryError }}</p>
       <p v-if="transcriptError" class="subscribe-error">{{ transcriptError }}</p>
 
-      <section
-        v-if="aiSummaryLoading || aiSummary || aiSummaryStatus === 'queued' || aiSummaryStatus === 'processing' || aiSummaryStatus === 'failed'"
-        class="ai-summary-card"
-      >
+      <section v-if="aiSummaryExpanded" class="ai-summary-card">
         <header class="ai-summary-head">
           <h2><AppIcon name="search" :size="14" /> AI Summary</h2>
-          <div class="ai-summary-meta" v-if="aiSummary">
-            <span class="ai-chip">{{ aiSummarySource === 'subtitle_text' ? 'Subtitles' : 'Metadata' }}</span>
-            <small class="ai-time">{{ new Date(aiSummaryGeneratedAt).toLocaleString() }}</small>
+          <div class="transcript-actions">
+            <button class="transcript-refresh" :disabled="aiSummaryLoading" @click="generateAiSummary">
+              {{ aiSummaryLoading ? 'Refreshing...' : (aiSummary ? 'Regenerate' : 'Generate') }}
+            </button>
+            <button class="transcript-refresh" @click="aiSummaryExpanded = false">Close</button>
           </div>
         </header>
-        <p v-if="aiSummaryLoading || aiSummaryStatus === 'queued' || aiSummaryStatus === 'processing'" class="ai-summary-placeholder">
+        <div class="ai-summary-meta" v-if="aiSummary">
+          <span class="ai-chip">{{ aiSummarySource === 'subtitle_text' ? 'Subtitles' : 'Metadata' }}</span>
+          <small class="ai-time">{{ new Date(aiSummaryGeneratedAt).toLocaleString() }}</small>
+        </div>
+        <p
+          v-if="aiSummaryLoading || aiSummaryStatus === 'queued' || aiSummaryStatus === 'processing'"
+          class="ai-summary-placeholder"
+        >
           Crafting a concise summary...
         </p>
         <p v-else-if="aiSummaryStatus === 'failed'" class="transcript-failed">
           AI summary failed. {{ aiSummaryError || 'Please retry.' }}
         </p>
-        <p v-else class="ai-summary-text">{{ aiSummary }}</p>
+        <p v-else-if="aiSummary" class="ai-summary-text">{{ aiSummary }}</p>
+        <p v-else class="transcript-note">
+          No AI summary yet. Click Generate to create one.
+        </p>
         <small v-if="aiSummary" class="ai-time">
           <span v-if="aiSummaryCached">Cached</span>
           <span v-if="aiSummaryProvider"> • {{ aiSummaryProvider }}</span>

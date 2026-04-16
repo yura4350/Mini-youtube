@@ -32,6 +32,7 @@ COMMUNICATION_API_BASE_URL = os.getenv("COMMUNICATION_API_BASE_URL", "").strip()
 INTELLIGENCE_API_BASE_URL = os.getenv("INTELLIGENCE_API_BASE_URL", "").strip().rstrip("/")
 SUMMARY_WAIT_TRANSCRIPT_SECONDS = int(os.getenv("SUMMARY_WAIT_TRANSCRIPT_SECONDS", "12"))
 SUMMARY_WAIT_TRANSCRIPT_POLL_SECONDS = float(os.getenv("SUMMARY_WAIT_TRANSCRIPT_POLL_SECONDS", "1.0"))
+SUMMARY_MAX_CHARS = int(os.getenv("SUMMARY_MAX_CHARS", "2000"))
 TAG_LOW_CONFIDENCE_THRESHOLD = float(os.getenv("TAG_LOW_CONFIDENCE_THRESHOLD", "0.34"))
 
 app = FastAPI(title="Dashboard Service")
@@ -157,7 +158,7 @@ def _summarize_mvp(source_text: str, max_sentences: int) -> str:
         chosen = [_clip_text(normalized, 220)]
 
     summary = " ".join(chosen)
-    return _clip_text(summary, 500)
+    return _clip_text(summary, SUMMARY_MAX_CHARS)
 
 
 def _summary_input_hash(source_text: str, source_kind: str, max_sentences: int) -> str:
@@ -561,7 +562,7 @@ def _run_summary_job(
             }
         )
         if proxied and proxied.get("summary"):
-            summary = _clip_text(str(proxied["summary"]), 500)
+            summary = _clip_text(str(proxied["summary"]), SUMMARY_MAX_CHARS)
             provider = str(proxied.get("provider") or "intelligence_service")
         else:
             summary = _summarize_mvp(source_text, max_sentences)
