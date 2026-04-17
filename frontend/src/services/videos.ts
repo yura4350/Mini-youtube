@@ -9,6 +9,11 @@ const DEFAULT_HOST =
       : 'localhost'
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || `http://${DEFAULT_HOST}:8000`).replace(/\/$/, '')
 
+function getAuthHeader(): Record<string, string> {
+  const token = authService.getToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 async function parseError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { detail?: string }
@@ -123,7 +128,6 @@ export async function uploadVideo(payload: UploadVideoPayload): Promise<VideoIte
 
 export interface UpdateVideoPayload {
   videoId: string
-  uploaderId: string
   title?: string
   description?: string
   category?: string
@@ -132,7 +136,6 @@ export interface UpdateVideoPayload {
 
 export async function updateVideo(payload: UpdateVideoPayload): Promise<VideoItem> {
   const formData = new FormData()
-  formData.append('requester_uploader_id', payload.uploaderId)
   if (payload.title !== undefined) formData.append('title', payload.title)
   if (payload.description !== undefined) formData.append('description', payload.description)
   if (payload.category !== undefined) formData.append('category', payload.category)
@@ -140,6 +143,7 @@ export async function updateVideo(payload: UpdateVideoPayload): Promise<VideoIte
 
   const response = await fetch(`${API_BASE_URL}/videos/${payload.videoId}`, {
     method: 'PATCH',
+    headers: getAuthHeader(),
     body: formData,
   })
 
@@ -161,11 +165,11 @@ export async function recordView(videoId: string): Promise<void> {
   await fetch(`${API_BASE_URL}/videos/${videoId}/view`, { method: 'POST' })
 }
 
-export async function deleteVideo(videoId: string, uploaderId: string): Promise<void> {
-  const response = await fetch(
-    `${API_BASE_URL}/videos/${videoId}?requester_uploader_id=${encodeURIComponent(uploaderId)}`,
-    { method: 'DELETE' },
-  )
+export async function deleteVideo(videoId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/videos/${videoId}`, {
+    method: 'DELETE',
+    headers: getAuthHeader(),
+  })
 
   if (!response.ok) {
     throw new Error(await parseError(response))

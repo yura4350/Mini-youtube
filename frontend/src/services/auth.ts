@@ -446,6 +446,7 @@ export const authService = {
   register,
   hydrateCurrentUser,
   getCurrentUser,
+  getToken,
   getAllUsers,
   fetchPublicProfile,
   updateCurrentUser,

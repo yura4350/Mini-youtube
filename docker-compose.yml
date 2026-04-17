@@ -31,6 +31,7 @@ services:
       PYTHONUNBUFFERED: "1"
       COMMUNICATION_API_BASE_URL: http://communication:8002
       DASHBOARD_API_BASE_URL: http://dashboard:8004
+      AUTH_API_BASE_URL: http://user-accounts-prefs:8003
       ASR_ENABLED: "true"
       ASR_MODEL_SIZE: "tiny"
       ASR_COMPUTE_TYPE: "int8"

@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from src.video_crud_service.main import app
 from src.video_crud_service.database import Base
-from src.video_crud_service.videos import get_db
+from src.video_crud_service.videos import get_db, get_current_user_id
 from src.video_crud_service.models import Video
 
 
@@ -34,6 +34,7 @@ def test_db():
             db.close()
     
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_id] = lambda: 1
     db_session = SessionLocal()
     yield db_session
     db_session.close()

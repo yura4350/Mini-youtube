@@ -333,7 +333,6 @@ async function saveChanges() {
   try {
     const updated = await updateVideo({
       videoId: currentVideo.value.id,
-      uploaderId: currentVideo.value.authorId,
       title: editForm.title,
       description: editForm.description,
       category: editForm.category,
@@ -357,7 +356,7 @@ async function onDelete() {
   isDeleting.value = true
   
   try {
-    await deleteVideo(currentVideo.value.id, currentVideo.value.authorId)
+    await deleteVideo(currentVideo.value.id)
     router.push('/')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Failed to delete video.'

@@ -6,7 +6,7 @@ import subprocess
 from uuid import uuid4
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, Depends, Query, Header
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 THUMBNAIL_DIR = UPLOAD_DIR / "thumbnails"
 THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
 COMMUNICATION_API_BASE_URL = os.getenv("COMMUNICATION_API_BASE_URL", "").strip().rstrip("/")
+AUTH_API_BASE_URL = os.getenv("AUTH_API_BASE_URL", "").strip().rstrip("/")
 DASHBOARD_API_BASE_URL = os.getenv("DASHBOARD_API_BASE_URL", "").strip().rstrip("/")
 MAX_NOTIFICATION_MESSAGE_LENGTH = 180
 ASR_ENABLED = os.getenv("ASR_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
@@ -302,6 +303,26 @@ def get_db():
         db.close()
 
 
+def get_current_user_id(authorization: str = Header(...)) -> int:
+    if not AUTH_API_BASE_URL:
+        raise HTTPException(status_code=500, detail="Auth service not configured")
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+    try:
+        resp = httpx.get(
+            f"{AUTH_API_BASE_URL}/verify-token/",
+            headers={"Authorization": authorization},
+            timeout=5,
+        )
+    except httpx.RequestError:
+        raise HTTPException(status_code=503, detail="Auth service unavailable")
+    if resp.status_code == 401:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if not resp.is_success:
+        raise HTTPException(status_code=503, detail="Auth service error")
+    return int(resp.json()["user"]["id"])
+
+
 def _subscriber_user_ids_for_channel(db: Session, channel_user_id: int) -> list[str]:
     rows = (
         db.query(Subscription.subscriber_user_id)
@@ -552,15 +573,15 @@ def update_video(
     description: str = Form(None),
     category: str = Form(None),
     tags: str = Form(None),
-    requester_uploader_id: int = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
 ):
     """Update video metadata (title, description, category, tags)"""
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    if requester_uploader_id != video.uploader_id:
+    if current_user_id != video.uploader_id:
         raise HTTPException(status_code=403, detail="You do not own this video")
     
     ALLOWED_CATEGORIES = {"Education", "Technology", "Nature", "Food", "Fitness", "Music", "Gaming"}
@@ -588,15 +609,15 @@ def update_video(
 @router.delete("/{video_id}")
 def delete_video(
     video_id: str,
-    requester_uploader_id: int = Query(...),
     db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
 ):
     """Delete video file and metadata"""
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    if requester_uploader_id != video.uploader_id:
+    if current_user_id != video.uploader_id:
         raise HTTPException(status_code=403, detail="You do not own this video")
 
     file_path = Path(video.path)
