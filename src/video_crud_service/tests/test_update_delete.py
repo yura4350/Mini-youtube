@@ -28,17 +28,17 @@ def test_update_video_multiple_fields(client, test_db):
         data={
             "title": "New Title",
             "description": "New description",
-            "category": "Sports",
+            "category": "Gaming",
             "tags": "new, tags",
             "requester_uploader_id": 1,
         },
     )
-    
+
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "New Title"
     assert data["description"] == "New description"
-    assert data["category"] == "Sports"
+    assert data["category"] == "Gaming"
 
 
 def test_update_video_unauthorized(client, test_db):
@@ -63,8 +63,73 @@ def test_update_nonexistent_video(client):
         "/videos/nonexistent",
         data={"title": "New", "requester_uploader_id": 1},
     )
-    
+
     assert response.status_code == 404
+
+
+def test_update_empty_title_leaves_title_unchanged(client, test_db):
+    """FastAPI treats an empty form string as None (not provided), so the
+    title must remain unchanged rather than being overwritten with blank."""
+    video = create_test_video(test_db, title="Original", uploader_id=1)
+
+    response = client.patch(
+        f"/videos/{video.id}",
+        data={"title": "", "requester_uploader_id": 1},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Original"
+
+
+def test_update_whitespace_only_title_rejected(client, test_db):
+    """Whitespace-only title must be rejected with 422."""
+    video = create_test_video(test_db, title="Original", uploader_id=1)
+
+    response = client.patch(
+        f"/videos/{video.id}",
+        data={"title": "   ", "requester_uploader_id": 1},
+    )
+
+    assert response.status_code == 422
+
+
+def test_update_title_is_stripped(client, test_db):
+    """Title with surrounding whitespace is saved trimmed."""
+    video = create_test_video(test_db, title="Original", uploader_id=1)
+
+    response = client.patch(
+        f"/videos/{video.id}",
+        data={"title": "  New Title  ", "requester_uploader_id": 1},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "New Title"
+
+
+def test_update_invalid_category_rejected(client, test_db):
+    """An unrecognised category must be rejected with 422."""
+    video = create_test_video(test_db, uploader_id=1)
+
+    response = client.patch(
+        f"/videos/{video.id}",
+        data={"category": "InvalidCategory", "requester_uploader_id": 1},
+    )
+
+    assert response.status_code == 422
+    assert "Invalid category" in response.json()["detail"]
+
+
+def test_update_valid_category_accepted(client, test_db):
+    """A valid category is accepted."""
+    video = create_test_video(test_db, uploader_id=1)
+
+    response = client.patch(
+        f"/videos/{video.id}",
+        data={"category": "Music", "requester_uploader_id": 1},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["category"] == "Music"
 
 
 def test_delete_video(client, test_db):

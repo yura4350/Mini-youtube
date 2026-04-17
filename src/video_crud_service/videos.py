@@ -563,12 +563,17 @@ def update_video(
     if requester_uploader_id != video.uploader_id:
         raise HTTPException(status_code=403, detail="You do not own this video")
     
-    # Update only provided fields
+    ALLOWED_CATEGORIES = {"Education", "Technology", "Nature", "Food", "Fitness", "Music", "Gaming"}
+
     if title is not None:
-        video.title = title
+        if not title.strip():
+            raise HTTPException(status_code=422, detail="Title cannot be empty.")
+        video.title = title.strip()
     if description is not None:
         video.description = description
     if category is not None:
+        if category not in ALLOWED_CATEGORIES:
+            raise HTTPException(status_code=422, detail=f"Invalid category. Must be one of: {', '.join(sorted(ALLOWED_CATEGORIES))}")
         video.category = category
     if tags is not None:
         video.tags = tags

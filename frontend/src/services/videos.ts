@@ -98,6 +98,7 @@ export async function uploadVideo(payload: UploadVideoPayload): Promise<VideoIte
 
 export interface UpdateVideoPayload {
   videoId: string
+  uploaderId: string
   title?: string
   description?: string
   category?: string
@@ -106,6 +107,7 @@ export interface UpdateVideoPayload {
 
 export async function updateVideo(payload: UpdateVideoPayload): Promise<VideoItem> {
   const formData = new FormData()
+  formData.append('requester_uploader_id', payload.uploaderId)
   if (payload.title !== undefined) formData.append('title', payload.title)
   if (payload.description !== undefined) formData.append('description', payload.description)
   if (payload.category !== undefined) formData.append('category', payload.category)

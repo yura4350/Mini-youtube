@@ -321,13 +321,19 @@ function cancelEditing() {
 
 async function saveChanges() {
   if (!currentVideo.value) return
-  
+
+  if (!editForm.title.trim()) {
+    editMessage.value = 'Title cannot be empty.'
+    return
+  }
+
   isSaving.value = true
   editMessage.value = ''
-  
+
   try {
     const updated = await updateVideo({
       videoId: currentVideo.value.id,
+      uploaderId: currentVideo.value.authorId,
       title: editForm.title,
       description: editForm.description,
       category: editForm.category,
