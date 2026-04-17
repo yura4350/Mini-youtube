@@ -4,6 +4,7 @@ import type { VideoItem } from '@/types/video'
 import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { fetchRecommended } from '@/services/dashboard'
+import { useAuthStore } from '@/stores/auth'
 
 const activeCategory = ref('All')
 const showFilterPanel = ref(false)
@@ -11,6 +12,7 @@ const sortBy = ref<'recommended' | 'latest' | 'popular'>('recommended')
 const loading = ref(false)
 const errorMessage = ref('')
 const videos = ref<VideoItem[]>([])
+const authStore = useAuthStore()
 
 const categories = computed(() => {
   const unique = new Set(videos.value.map((video) => video.category).filter(Boolean))
@@ -50,7 +52,7 @@ async function loadVideos() {
   errorMessage.value = ''
 
   try {
-    videos.value = await fetchRecommended()
+    videos.value = await fetchRecommended(authStore.currentUser?.id)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Failed to load videos'
   } finally {
