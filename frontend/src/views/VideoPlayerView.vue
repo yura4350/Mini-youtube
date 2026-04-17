@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { formatViews } from '@/services/video-format'
-import { fetchVideoById, fetchVideoTranscript, fetchVideos, updateVideo, deleteVideo } from '@/services/videos'
+import { fetchVideoById, fetchVideoTranscript, fetchVideos, updateVideo, deleteVideo, recordView } from '@/services/videos'
 import { toApiUploaderId } from '@/services/user-id'
 import { recordWatchEvent, fetchSubscribedChannelIds, subscribeToChannel, unsubscribeFromChannel } from '@/services/dashboard'
 import { summarizeVideo, fetchAiSummaryStatus, retryAiSummary, fetchAiTags } from '@/services/intelligence'
@@ -53,6 +53,8 @@ const chatConnected = ref(false)
 const chatStatus = ref('Connecting...')
 const chatContainer = ref<HTMLElement | null>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
+const viewRecorded = ref(false)
+const VIEW_THRESHOLD_SECONDS = 10
 let chatSocket: WebSocket | null = null
 let watchEventInterval: ReturnType<typeof setInterval> | null = null
 let aiTagsPollInterval: ReturnType<typeof setInterval> | null = null
@@ -176,6 +178,16 @@ function startRecordingWatchEvents() {
       // Silently fail - don't show error to user
     })
   }, 10000)
+}
+
+function onTimeUpdate() {
+  if (viewRecorded.value || !currentVideo.value || !videoElement.value) return
+  const duration = videoElement.value.duration || Infinity
+  const threshold = Math.min(VIEW_THRESHOLD_SECONDS, duration * 0.2)
+  if (videoElement.value.currentTime >= threshold) {
+    viewRecorded.value = true
+    recordView(currentVideo.value.id).catch(() => {})
+  }
 }
 
 function connectChat() {
@@ -532,6 +544,7 @@ watch(
     transcriptLanguage.value = ''
     transcriptUpdatedAt.value = ''
     transcriptExpanded.value = false
+    viewRecorded.value = false
     stopAiTagsPolling()
     stopRecordingWatchEvents()
     loadCurrentVideo()
@@ -571,7 +584,7 @@ watch(
   <main v-if="currentVideo" class="watch-page">
     <section class="main-col">
       <div class="player-wrap">
-        <video ref="videoElement" :src="playbackUrl" :poster="currentVideo.thumbnail" controls preload="metadata" @play="startRecordingWatchEvents" @pause="stopRecordingWatchEvents" />
+        <video ref="videoElement" :src="playbackUrl" :poster="currentVideo.thumbnail" controls preload="metadata" @play="startRecordingWatchEvents" @pause="stopRecordingWatchEvents" @timeupdate="onTimeUpdate" />
       </div>
 
       <h1>{{ currentVideo.title }}</h1>
