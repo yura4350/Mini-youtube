@@ -118,6 +118,14 @@ class UserResponse(BaseModel): # Determines what is given by a model
         from_attributes = True
 
 # New Pydantic Models
+class PublicUserResponse(BaseModel):
+    id: int
+    name: str
+    avatar: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 class UserLogin(BaseModel):
     email: str
     password: str
@@ -401,10 +409,22 @@ def delete(user_id:int, current_user:User = Depends(get_current_active_user), db
     return {"message":"User deleted!"}
 
 
-# Get all users
+# Get all users (authenticated)
 @app.get("/users/", response_model=List[UserResponse])
 def get_all_users(current_user:User = Depends(get_current_active_user), db:Session = Depends(get_db)):
     return db.query(User).all()
+
+# Public endpoints — no auth required, returns only non-sensitive fields
+@app.get("/users/public/", response_model=List[PublicUserResponse])
+def get_all_public_users(db: Session = Depends(get_db)):
+    return db.query(User).filter(User.is_active == True).all()
+
+@app.get("/user/public/{user_id}", response_model=PublicUserResponse)
+def get_public_user(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 ### USER PREFERENCES TABLE RELATED ENDPOINTS ###
 # Get user's own preferences

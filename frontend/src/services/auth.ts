@@ -278,17 +278,8 @@ export type FetchPublicProfileResult =
   | { ok: false; status: number; message: string }
 
 async function fetchPublicProfile(userId: number): Promise<FetchPublicProfileResult> {
-  const token = getToken()
-  if (!token) {
-    return { ok: false, status: 401, message: 'Sign in to view profiles.' }
-  }
-
   try {
-    const response = await fetch(`${AUTH_API_BASE_URL}/user/profile/${userId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
+    const response = await fetch(`${AUTH_API_BASE_URL}/user/public/${userId}`)
 
     if (response.status === 404) {
       const err = (await response.json().catch(() => null)) as { detail?: string } | null
@@ -316,18 +307,9 @@ async function fetchPublicProfile(userId: number): Promise<FetchPublicProfileRes
 
 // Keep compatibility with existing UI code that calls getAllUsers()
 async function getAllUsers(): Promise<User[]> {
-  const token = getToken()
-  if (!token) return []
-
   try {
-    const response = await fetch(`${AUTH_API_BASE_URL}/users/`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-
+    const response = await fetch(`${AUTH_API_BASE_URL}/users/public/`)
     if (!response.ok) return []
-
     const backendUsers = (await response.json()) as BackendUser[]
     return backendUsers.map(mapBackendUser)
   } catch {

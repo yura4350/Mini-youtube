@@ -1,4 +1,5 @@
 import { mapVideoApiItemToVideoItem, type VideoApiItem, type VideoItem } from '@/types/video'
+import { authService } from '@/services/auth'
 
 const DEFAULT_HOST =
   typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -9,6 +10,19 @@ const DEFAULT_HOST =
 const DASHBOARD_API_BASE_URL = (
   import.meta.env.VITE_DASHBOARD_API_BASE_URL || `http://${DEFAULT_HOST}:8004`
 ).replace(/\/$/, '')
+
+async function enrichWithUsernames(items: VideoItem[]): Promise<void> {
+  const users = await authService.getAllUsers()
+  if (!users.length) return
+  const userMap = new Map(users.map((u) => [u.id, u]))
+  for (const item of items) {
+    const user = userMap.get(item.authorId)
+    if (user) {
+      item.authorName = user.username
+      item.authorAvatar = user.avatar
+    }
+  }
+}
 
 async function parseError(response: Response): Promise<string> {
   try {
@@ -28,7 +42,9 @@ export async function fetchRecommended(): Promise<VideoItem[]> {
   }
 
   const payload = (await response.json()) as { videos: VideoApiItem[] }
-  return payload.videos.map(mapVideoApiItemToVideoItem)
+  const items = payload.videos.map(mapVideoApiItemToVideoItem)
+  await enrichWithUsernames(items)
+  return items
 }
 
 export async function searchVideos(query: string): Promise<VideoItem[]> {
@@ -41,7 +57,9 @@ export async function searchVideos(query: string): Promise<VideoItem[]> {
   }
 
   const payload = (await response.json()) as { query: string; results: VideoApiItem[] }
-  return payload.results.map(mapVideoApiItemToVideoItem)
+  const items = payload.results.map(mapVideoApiItemToVideoItem)
+  await enrichWithUsernames(items)
+  return items
 }
 
 export async function fetchSearchSuggestions(query: string): Promise<string[]> {
@@ -100,11 +118,13 @@ export async function fetchWatchedHistory(userId: string, limit: number = 20): P
     user_id: string
     videos: Array<VideoApiItem & { last_watched_at: string; last_position_seconds: number }>
   }
-  return payload.videos.map((v) => ({
+  const items = payload.videos.map((v) => ({
     ...mapVideoApiItemToVideoItem(v),
     lastWatchedAt: v.last_watched_at,
     lastPositionSeconds: v.last_position_seconds,
   }))
+  await enrichWithUsernames(items)
+  return items
 }
 
 /**
@@ -140,7 +160,9 @@ export async function fetchSubscriptionsFeed(userId: string, limit: number = 20)
   }
 
   const payload = (await response.json()) as { user_id: string; videos: VideoApiItem[] }
-  return payload.videos.map(mapVideoApiItemToVideoItem)
+  const items = payload.videos.map(mapVideoApiItemToVideoItem)
+  await enrichWithUsernames(items)
+  return items
 }
 
 export async function fetchSubscribedChannelIds(userId: string): Promise<string[]> {

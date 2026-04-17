@@ -1,4 +1,5 @@
 import { mapVideoApiItemToVideoItem, type VideoApiItem, type VideoItem } from '@/types/video'
+import { authService } from '@/services/auth'
 
 const DEFAULT_HOST =
   typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -20,14 +21,26 @@ async function parseError(response: Response): Promise<string> {
 }
 
 export async function fetchVideos(): Promise<VideoItem[]> {
-  const response = await fetch(`${API_BASE_URL}/videos`)
+  const [response, users] = await Promise.all([
+    fetch(`${API_BASE_URL}/videos`),
+    authService.getAllUsers(),
+  ])
 
   if (!response.ok) {
     throw new Error(await parseError(response))
   }
 
+  const userMap = new Map(users.map((u) => [u.id, u]))
   const payload = (await response.json()) as VideoApiItem[]
-  return payload.map(mapVideoApiItemToVideoItem)
+  return payload.map((v) => {
+    const item = mapVideoApiItemToVideoItem(v)
+    const user = userMap.get(String(v.uploader_id))
+    if (user) {
+      item.authorName = user.username
+      item.authorAvatar = user.avatar
+    }
+    return item
+  })
 }
 
 export async function fetchVideoById(videoId: string): Promise<VideoItem> {
@@ -38,7 +51,13 @@ export async function fetchVideoById(videoId: string): Promise<VideoItem> {
   }
 
   const payload = (await response.json()) as VideoApiItem
-  return mapVideoApiItemToVideoItem(payload)
+  const item = mapVideoApiItemToVideoItem(payload)
+  const result = await authService.fetchPublicProfile(payload.uploader_id)
+  if (result.ok) {
+    item.authorName = result.user.username
+    item.authorAvatar = result.user.avatar
+  }
+  return item
 }
 
 export interface VideoTranscriptItem {
@@ -93,7 +112,13 @@ export async function uploadVideo(payload: UploadVideoPayload): Promise<VideoIte
   }
 
   const video = (await response.json()) as VideoApiItem
-  return mapVideoApiItemToVideoItem(video)
+  const item = mapVideoApiItemToVideoItem(video)
+  const currentUser = authService.getCurrentUser()
+  if (currentUser) {
+    item.authorName = currentUser.username
+    item.authorAvatar = currentUser.avatar
+  }
+  return item
 }
 
 export interface UpdateVideoPayload {
@@ -123,7 +148,13 @@ export async function updateVideo(payload: UpdateVideoPayload): Promise<VideoIte
   }
 
   const video = (await response.json()) as VideoApiItem
-  return mapVideoApiItemToVideoItem(video)
+  const item = mapVideoApiItemToVideoItem(video)
+  const currentUser = authService.getCurrentUser()
+  if (currentUser) {
+    item.authorName = currentUser.username
+    item.authorAvatar = currentUser.avatar
+  }
+  return item
 }
 
 export async function recordView(videoId: string): Promise<void> {
