@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from src.dashboard_service.models import Subscription
 from src.dashboard_service.tag_taxonomy import canonical_seed_tags, normalize_tag
-from .models import Video, VideoTranscript
+from .models import Video, VideoSummary, VideoTag, VideoTranscript
 from .database import SessionLocal
 
 router = APIRouter(prefix="/videos", tags=["videos"])
@@ -83,6 +83,25 @@ def _generate_first_frame_thumbnail(video_path: Path, thumbnail_path: Path) -> b
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
+
+
+def _has_audio_stream(video_path: Path) -> bool:
+    """Return True if the file contains at least one audio stream."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-select_streams", "a",
+                "-show_entries", "stream=codec_type",
+                "-of", "csv=p=0",
+                str(video_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        return bool(result.stdout.strip())
+    except FileNotFoundError:
+        return True  # ffprobe unavailable — let Whisper try anyway
 
 
 def _transcribe_video_audio_to_text(video_path: Path) -> tuple[str, str | None] | None:
@@ -193,6 +212,17 @@ def _generate_and_store_transcript_for_video(video_id: str, video_path: str, sho
             source="faster_whisper",
             status="failed",
             error_message="ASR is disabled by configuration.",
+            language=None,
+        )
+        return
+
+    if not _has_audio_stream(Path(video_path)):
+        _best_effort_update_transcript(
+            video_id=video_id,
+            transcript_text="",
+            source="faster_whisper",
+            status="failed",
+            error_message="Video has no audio track — transcript not available.",
             language=None,
         )
         return
@@ -575,7 +605,10 @@ def delete_video(
     if thumbnail_path.exists():
         thumbnail_path.unlink()
     
-    # Remove from database
+    # Remove all dependent rows before deleting the video record
+    db.query(VideoTranscript).filter(VideoTranscript.video_id == video_id).delete()
+    db.query(VideoSummary).filter(VideoSummary.video_id == video_id).delete()
+    db.query(VideoTag).filter(VideoTag.video_id == video_id).delete()
     db.delete(video)
     db.commit()
 

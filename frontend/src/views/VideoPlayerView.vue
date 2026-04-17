@@ -351,7 +351,7 @@ async function onDelete() {
   isDeleting.value = true
   
   try {
-    await deleteVideo(currentVideo.value.id)
+    await deleteVideo(currentVideo.value.id, currentVideo.value.authorId)
     router.push('/')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Failed to delete video.'
