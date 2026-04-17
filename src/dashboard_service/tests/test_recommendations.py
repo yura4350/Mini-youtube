@@ -1,4 +1,8 @@
-from .conftest import create_test_video
+from datetime import datetime, timezone, timedelta
+
+from src.video_crud_service.models import Video
+
+from .conftest import create_test_video, create_test_watch_history
 
 
 def test_recommend_empty_database(client):
@@ -125,3 +129,74 @@ def test_recommend_response_structure(client, test_db):
             "duration_seconds", "created_at"
         }
         assert required_fields.issubset(video_data.keys())
+
+
+def test_recommend_personalized_prefers_matching_tags(client, test_db):
+    base_time = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    watched = Video(
+        id="watched-music",
+        title="Watched music",
+        description="history anchor",
+        category="Music",
+        tags="music,concert",
+        thumbnail_url="/thumb-w",
+        uploader_id=1,
+        original_filename="w.mp4",
+        saved_filename="w_saved.mp4",
+        content_type="video/mp4",
+        size=1024,
+        path="/tmp/w.mp4",
+        views=5,
+        likes=1,
+        duration_seconds=60,
+        created_at=base_time,
+    )
+    match_candidate = Video(
+        id="candidate-music",
+        title="Recommended music",
+        description="similar topic",
+        category="Music",
+        tags="music,live-stream",
+        thumbnail_url="/thumb-m",
+        uploader_id=2,
+        original_filename="m.mp4",
+        saved_filename="m_saved.mp4",
+        content_type="video/mp4",
+        size=1024,
+        path="/tmp/m.mp4",
+        views=1,
+        likes=0,
+        duration_seconds=60,
+        created_at=base_time + timedelta(seconds=10),
+    )
+    non_match_candidate = Video(
+        id="candidate-sports",
+        title="Sports update",
+        description="different topic",
+        category="Sports",
+        tags="sports",
+        thumbnail_url="/thumb-s",
+        uploader_id=3,
+        original_filename="s.mp4",
+        saved_filename="s_saved.mp4",
+        content_type="video/mp4",
+        size=1024,
+        path="/tmp/s.mp4",
+        views=100,
+        likes=10,
+        duration_seconds=60,
+        created_at=base_time + timedelta(seconds=20),
+    )
+
+    test_db.add_all([watched, match_candidate, non_match_candidate])
+    test_db.commit()
+    create_test_watch_history(test_db, user_id="u-1", video_id="watched-music", position_seconds=240)
+
+    response = client.get("/dashboard/recommend?user_id=u-1")
+    assert response.status_code == 200
+    data = response.json()
+    ids = [v["id"] for v in data["videos"]]
+
+    assert "watched-music" not in ids
+    assert ids[0] == "candidate-music"

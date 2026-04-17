@@ -34,8 +34,9 @@ async function parseError(response: Response): Promise<string> {
   return `Request failed with status ${response.status}`
 }
 
-export async function fetchRecommended(): Promise<VideoItem[]> {
-  const response = await fetch(`${DASHBOARD_API_BASE_URL}/dashboard/recommend`)
+export async function fetchRecommended(userId?: string): Promise<VideoItem[]> {
+  const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : ''
+  const response = await fetch(`${DASHBOARD_API_BASE_URL}/dashboard/recommend${qs}`)
 
   if (!response.ok) {
     throw new Error(await parseError(response))
