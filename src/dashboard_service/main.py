@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import hashlib
+import math
 import time
 from datetime import datetime, timezone
 
@@ -314,6 +315,44 @@ def _infer_primary_category(db: Session, canonical_tags: list[str]) -> str | Non
     if not counts:
         return None
     return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
+
+
+def _video_fallback_tags(video: Video) -> set[str]:
+    return {_normalize_tag(tag) for tag in (video.tags or "").split(",") if _normalize_tag(tag)}
+
+
+def _video_ai_tags_map(db: Session, video_ids: list[str]) -> dict[str, set[str]]:
+    if not video_ids:
+        return {}
+    rows = db.query(VideoTag).filter(VideoTag.video_id.in_(video_ids)).all()
+    result: dict[str, set[str]] = {}
+    for row in rows:
+        tag = _normalize_tag(row.tag or "")
+        if not tag:
+            continue
+        result.setdefault(row.video_id, set()).add(tag)
+    return result
+
+
+def _recommendation_score_components(
+    *,
+    now: datetime,
+    video: Video,
+    tag_interest: dict[str, float],
+    effective_tags: set[str],
+    max_popularity: float,
+    max_tag_overlap: float,
+) -> tuple[float, float, float]:
+    tag_overlap = sum(tag_interest.get(tag, 0.0) for tag in effective_tags)
+    tag_overlap_norm = (tag_overlap / max_tag_overlap) if max_tag_overlap > 0 else 0.0
+
+    age_seconds = max(1.0, (now - (video.created_at or now)).total_seconds())
+    # Decays gradually over ~2 weeks.
+    recency_score = math.exp(-age_seconds / (14 * 24 * 3600))
+
+    popularity_raw = math.log1p(max(0, video.views) + 2 * max(0, video.likes))
+    popularity_score = (popularity_raw / max_popularity) if max_popularity > 0 else 0.0
+    return tag_overlap_norm, recency_score, popularity_score
 
 
 def _tag_confidence_scores(
@@ -1112,10 +1151,82 @@ def notifications(
 
 
 @app.get("/dashboard/recommend")
-def recommend(db: Session = Depends(get_db)):
-    """Return videos ordered by newest first.
-    TODO: personalize recommendations based on user preferences and watch history in the future.
+def recommend(
+    user_id: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    """Return recommended videos.
+    - No user_id: newest-first fallback.
+    - With user_id and watch history: rank by tag overlap + recency + popularity.
     """
-    logger.info("Recommend requested")
+    logger.info("Recommend requested user_id=%s", user_id)
     videos = db.query(Video).order_by(Video.created_at.desc()).all()
-    return {"videos": [serialize_video(v) for v in videos]}
+    if not videos:
+        return {"videos": []}
+
+    if not user_id:
+        return {"videos": [serialize_video(v) for v in videos]}
+
+    history_rows = (
+        db.query(WatchHistory)
+        .filter(WatchHistory.user_id == user_id)
+        .order_by(WatchHistory.last_watched_at.desc())
+        .limit(80)
+        .all()
+    )
+    if not history_rows:
+        return {"videos": [serialize_video(v) for v in videos]}
+
+    watched_ids = {row.video_id for row in history_rows}
+    video_ids = [v.id for v in videos]
+    ai_tags_by_video = _video_ai_tags_map(db, video_ids)
+    effective_tags_by_video: dict[str, set[str]] = {}
+    for video in videos:
+        ai_tags = ai_tags_by_video.get(video.id, set())
+        fallback_tags = _video_fallback_tags(video)
+        effective_tags_by_video[video.id] = ai_tags or fallback_tags
+
+    tag_interest: dict[str, float] = {}
+    history_count = len(history_rows)
+    for idx, row in enumerate(history_rows):
+        tags = effective_tags_by_video.get(row.video_id, set())
+        if not tags:
+            continue
+        recency_weight = max(1.0, float(history_count - idx))
+        completion_bonus = min(1.0, max(0.0, float(row.last_position_seconds or 0)) / 180.0)
+        weight = 1.0 + (0.12 * recency_weight) + (0.25 * completion_bonus)
+        for tag in tags:
+            tag_interest[tag] = tag_interest.get(tag, 0.0) + weight
+
+    if not tag_interest:
+        return {"videos": [serialize_video(v) for v in videos]}
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    overlap_candidates = [
+        sum(tag_interest.get(tag, 0.0) for tag in effective_tags_by_video.get(video.id, set()))
+        for video in videos
+    ]
+    max_tag_overlap = max(overlap_candidates) if overlap_candidates else 0.0
+    max_popularity = max(
+        (math.log1p(max(0, v.views) + 2 * max(0, v.likes)) for v in videos),
+        default=0.0,
+    )
+
+    scored: list[tuple[float, datetime, Video]] = []
+    for video in videos:
+        overlap_score, recency_score, popularity_score = _recommendation_score_components(
+            now=now,
+            video=video,
+            tag_interest=tag_interest,
+            effective_tags=effective_tags_by_video.get(video.id, set()),
+            max_popularity=max_popularity,
+            max_tag_overlap=max_tag_overlap,
+        )
+        score = 0.65 * overlap_score + 0.20 * recency_score + 0.15 * popularity_score
+        scored.append((score, video.created_at or datetime.min, video))
+
+    scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+
+    unseen = [video for _, _, video in scored if video.id not in watched_ids]
+    ranked = unseen if unseen else [video for _, _, video in scored]
+    return {"videos": [serialize_video(v) for v in ranked]}
