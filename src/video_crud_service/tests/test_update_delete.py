@@ -1,4 +1,4 @@
-from src.video_crud_service.models import Video
+from src.video_crud_service.models import Video, VideoSummary, VideoTag, VideoTranscript
 from .conftest import create_test_video
 
 
@@ -68,18 +68,60 @@ def test_update_nonexistent_video(client):
 
 
 def test_delete_video(client, test_db):
-    """Test deleting a video."""
+    """Test deleting a video removes the video row."""
     video = create_test_video(test_db, uploader_id=1)
     video_id = video.id
-    
+
     response = client.delete(f"/videos/{video_id}?requester_uploader_id=1")
-    
+
     assert response.status_code == 200
     assert response.json()["id"] == video_id
-    
-    # Verify deleted from database
+
     deleted = test_db.query(Video).filter(Video.id == video_id).first()
     assert deleted is None
+
+
+def test_delete_video_removes_transcript(client, test_db):
+    """Deleting a video must also remove its VideoTranscript row."""
+    video = create_test_video(test_db, uploader_id=1)
+    video_id = video.id
+    test_db.add(VideoTranscript(video_id=video_id, transcript_text="hello", status="ready"))
+    test_db.commit()
+
+    client.delete(f"/videos/{video_id}?requester_uploader_id=1")
+
+    test_db.expire_all()
+    orphan = test_db.query(VideoTranscript).filter(VideoTranscript.video_id == video_id).first()
+    assert orphan is None
+
+
+def test_delete_video_removes_summary(client, test_db):
+    """Deleting a video must also remove its VideoSummary row."""
+    video = create_test_video(test_db, uploader_id=1)
+    video_id = video.id
+    test_db.add(VideoSummary(video_id=video_id, status="ready", summary="short summary"))
+    test_db.commit()
+
+    client.delete(f"/videos/{video_id}?requester_uploader_id=1")
+
+    test_db.expire_all()
+    orphan = test_db.query(VideoSummary).filter(VideoSummary.video_id == video_id).first()
+    assert orphan is None
+
+
+def test_delete_video_removes_tags(client, test_db):
+    """Deleting a video must also remove its VideoTag rows."""
+    video = create_test_video(test_db, uploader_id=1)
+    video_id = video.id
+    test_db.add(VideoTag(video_id=video_id, tag="python"))
+    test_db.add(VideoTag(video_id=video_id, tag="tutorial"))
+    test_db.commit()
+
+    client.delete(f"/videos/{video_id}?requester_uploader_id=1")
+
+    test_db.expire_all()
+    orphans = test_db.query(VideoTag).filter(VideoTag.video_id == video_id).all()
+    assert orphans == []
 
 
 def test_delete_video_unauthorized(client, test_db):
