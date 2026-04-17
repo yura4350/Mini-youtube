@@ -359,13 +359,13 @@ def _tag_confidence_scores(
     db: Session,
     *,
     source_text: str,
-    title: str | None,
-    description: str | None,
     canonical_tags: list[str],
 ) -> dict[str, float]:
     if not canonical_tags:
         return {}
-    text = f"{title or ''}\n{description or ''}\n{source_text or ''}".lower()
+    # Confidence uses transcript evidence only. Title/description can be noisy
+    # or in a different language and should not down-rank otherwise good tags.
+    text = (source_text or "").lower()
     alias_rows = (
         db.query(TagAlias)
         .filter(TagAlias.canonical_tag.in_(canonical_tags))
@@ -827,18 +827,25 @@ def ai_tagging(payload: TaggingRequest, db: Session = Depends(get_db)):
     confidence_scores = _tag_confidence_scores(
         db,
         source_text=source_text,
-        title=video.title,
-        description=video.description,
         canonical_tags=canonical_tags[: payload.max_tags],
     )
     max_confidence = max(confidence_scores.values()) if confidence_scores else 0.0
     primary_category = _infer_primary_category(db, canonical_tags[: payload.max_tags])
     confidence_mode = "normal"
     tags_to_store = canonical_tags[: payload.max_tags]
-    if max_confidence < TAG_LOW_CONFIDENCE_THRESHOLD:
-        # Low-confidence case: return only coarse category and avoid noisy fine-grained tags.
-        tags_to_store = []
-        confidence_mode = "low_confidence_category_only"
+    if provider != "openai" and max_confidence < TAG_LOW_CONFIDENCE_THRESHOLD:
+        # Low-confidence case: keep at least one best-effort tag so UI/recommendation
+        # still has a usable signal instead of returning an empty tag set.
+        ranked_conf = sorted(
+            confidence_scores.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+        if ranked_conf:
+            tags_to_store = [ranked_conf[0][0]]
+            confidence_mode = "low_confidence_single_tag"
+        else:
+            tags_to_store = canonical_tags[:1]
+            confidence_mode = "low_confidence_single_tag"
 
     stored_tags = _replace_video_tags(db, video.id, tags_to_store)
     return {

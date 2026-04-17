@@ -19,7 +19,6 @@ const selectedCanonicalTags = ref<string[]>([])
 const form = reactive({
   title: '',
   description: '',
-  category: 'Education',
 })
 
 const tagsByCategory = computed<Record<string, AiTagTaxonomyItem[]>>(() => {
@@ -31,6 +30,36 @@ const tagsByCategory = computed<Record<string, AiTagTaxonomyItem[]>>(() => {
     grouped[category] = list
   }
   return grouped
+})
+
+function _displayCategory(raw: string): string {
+  return raw
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+const inferredPrimaryCategory = computed<string | null>(() => {
+  if (selectedCanonicalTags.value.length === 0) return null
+  const canonicalToCategory = new Map(tagOptions.value.map((item) => [item.canonical_tag, item.category]))
+  const counts: Record<string, number> = {}
+  for (const tag of selectedCanonicalTags.value) {
+    const category = canonicalToCategory.get(tag)
+    if (!category) continue
+    counts[category] = (counts[category] || 0) + 1
+  }
+  const entries = Object.entries(counts)
+  if (entries.length === 0) return null
+  entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  const top = entries[0]
+  if (!top) return null
+  return top[0]
+})
+
+const uploadCategory = computed<string>(() => {
+  if (!inferredPrimaryCategory.value) return 'General'
+  return _displayCategory(inferredPrimaryCategory.value)
 })
 
 async function loadTagTaxonomy() {
@@ -93,7 +122,7 @@ async function onSubmit() {
       file: selectedFile.value,
       title: form.title,
       description: form.description,
-      category: form.category,
+      category: uploadCategory.value,
       tags: selectedCanonicalTags.value.join(','),
       uploaderId,
       durationSeconds: videoDuration.value,
@@ -102,7 +131,6 @@ async function onSubmit() {
     successMessage.value = `Uploaded "${created.title}" successfully.`
     form.title = ''
     form.description = ''
-    form.category = 'Education'
     selectedCanonicalTags.value = []
     selectedFile.value = null
   } catch (error) {
@@ -123,6 +151,9 @@ onMounted(() => {
       <h1><AppIcon name="upload" :size="22" /> Upload video</h1>
       <p class="sub">Upload a video file and metadata to the Video CRUD service.</p>
       <p class="subtle-note">
+        Category is auto-derived from your selected canonical tags.
+      </p>
+      <p class="subtle-note">
         If you select tags manually, AI auto-tagging will be skipped for this upload. If you leave tags empty, AI
         will generate tags automatically from your video transcript.
       </p>
@@ -141,19 +172,6 @@ onMounted(() => {
         <label>
           Description
           <textarea v-model="form.description" rows="5" placeholder="Describe your video"></textarea>
-        </label>
-
-        <label>
-          Category
-          <select v-model="form.category">
-            <option>Education</option>
-            <option>Technology</option>
-            <option>Nature</option>
-            <option>Food</option>
-            <option>Fitness</option>
-            <option>Music</option>
-            <option>Gaming</option>
-          </select>
         </label>
 
         <label>
@@ -181,6 +199,14 @@ onMounted(() => {
               </div>
             </template>
           </div>
+          <p class="muted-mini category-note">
+            Primary category:
+            {{
+              inferredPrimaryCategory
+                ? _displayCategory(inferredPrimaryCategory)
+                : 'General (will be inferred by AI when tags are auto-generated)'
+            }}
+          </p>
         </label>
 
         <button :disabled="loading" type="submit" class="submit-btn">

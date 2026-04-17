@@ -7,7 +7,7 @@ import { formatViews } from '@/services/video-format'
 import { fetchVideoById, fetchVideoTranscript, fetchVideos, updateVideo, deleteVideo, recordView } from '@/services/videos'
 import { toApiUploaderId } from '@/services/user-id'
 import { recordWatchEvent, fetchSubscribedChannelIds, subscribeToChannel, unsubscribeFromChannel } from '@/services/dashboard'
-import { summarizeVideo, fetchAiSummaryStatus, retryAiSummary, fetchAiTags } from '@/services/intelligence'
+import { summarizeVideo, fetchAiSummaryStatus, retryAiSummary, fetchAiTags, fetchAiTagTaxonomy } from '@/services/intelligence'
 import { useAuthStore } from '@/stores/auth'
 import type { VideoItem } from '@/types/video'
 
@@ -38,6 +38,7 @@ const aiSummaryRetryCount = ref(0)
 const aiSummaryExpanded = ref(false)
 const aiTags = ref<string[]>([])
 const aiTagsProvider = ref('')
+const aiTagDisplayByCanonical = ref<Record<string, string>>({})
 const transcriptText = ref('')
 const transcriptStatus = ref<'idle' | 'pending' | 'queued' | 'processing' | 'ready' | 'failed'>('idle')
 const transcriptLoading = ref(false)
@@ -276,9 +277,54 @@ const relatedVideos = computed(() => {
     .slice(0, 6)
 })
 
+const manualVideoTags = computed(() => {
+  if (!currentVideo.value) return [] as string[]
+  return (currentVideo.value.tags || []).map((t) => t.trim()).filter((t) => t.length > 0)
+})
+
+const displayTags = computed(() => {
+  return aiTags.value.length > 0 ? aiTags.value : manualVideoTags.value
+})
+
+const tagsHeading = computed(() => {
+  return 'Tags'
+})
+
+const tagsSourceLabel = computed(() => {
+  return aiTags.value.length > 0 ? 'AI generated' : 'From video metadata'
+})
+
+function titleizeTag(raw: string): string {
+  return raw
+    .split('-')
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+const displayTagLabels = computed(() => {
+  return displayTags.value.map((tag) => aiTagDisplayByCanonical.value[tag] || titleizeTag(tag))
+})
+
+async function loadAiTagTaxonomy() {
+  try {
+    const result = await fetchAiTagTaxonomy()
+    const mapping: Record<string, string> = {}
+    for (const item of result.tags || []) {
+      if (item.canonical_tag && item.display_name) {
+        mapping[item.canonical_tag] = item.display_name
+      }
+    }
+    aiTagDisplayByCanonical.value = mapping
+  } catch {
+    aiTagDisplayByCanonical.value = {}
+  }
+}
+
 onMounted(() => {
   loadCurrentVideo()
   loadMySubscriptions()
+  loadAiTagTaxonomy()
 })
 
 onUnmounted(() => {
@@ -633,7 +679,7 @@ watch(
           </div>
         </header>
         <div class="ai-summary-meta" v-if="aiSummary">
-          <span class="ai-chip">{{ aiSummarySource === 'subtitle_text' ? 'Subtitles' : 'Metadata' }}</span>
+          <span class="ai-chip">{{ aiSummarySource === 'subtitle_text' ? 'From Transcript' : 'From Metadata' }}</span>
           <small class="ai-time">{{ new Date(aiSummaryGeneratedAt).toLocaleString() }}</small>
         </div>
         <p
@@ -664,13 +710,15 @@ watch(
         </button>
       </section>
 
-      <section v-if="aiTags.length > 0" class="transcript-card">
+      <section v-if="displayTags.length > 0" class="transcript-card">
         <header class="transcript-head">
-          <h2><AppIcon name="search" :size="14" /> AI Tags</h2>
-          <small class="ai-time" v-if="aiTagsProvider">{{ aiTagsProvider }}</small>
+          <h2><AppIcon name="search" :size="14" /> {{ tagsHeading }}</h2>
+          <small class="ai-time">
+            {{ tagsSourceLabel }}<span v-if="aiTags.length > 0 && aiTagsProvider"> • {{ aiTagsProvider }}</span>
+          </small>
         </header>
         <div class="tag-list">
-          <span v-for="tag in aiTags" :key="tag" class="tag-chip">#{{ tag }}</span>
+          <span v-for="(label, idx) in displayTagLabels" :key="`${displayTags[idx]}-${idx}`" class="tag-chip">{{ label }}</span>
         </div>
       </section>
 
@@ -953,15 +1001,21 @@ h1 {
 .ai-summary-head {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+.ai-summary-head .transcript-actions {
+  margin-left: auto;
 }
 
 .ai-summary-meta {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+  margin-top: 8px;
 }
 
 .ai-summary-card h2 {

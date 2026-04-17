@@ -14,7 +14,7 @@ TAG_TAXONOMY_SEED: dict[str, dict[str, object]] = {
     "news": {"display_name": "News", "category": "current-events", "aliases": ["headlines", "breaking-news"]},
     "politics": {"display_name": "Politics", "category": "current-events", "aliases": ["government", "election"]},
     "education": {"display_name": "Education", "category": "knowledge", "aliases": ["learning", "lesson"]},
-    "how-to": {"display_name": "How-To", "category": "knowledge", "aliases": ["tutorial", "guide"]},
+    "how-to": {"display_name": "Tutorial", "category": "knowledge", "aliases": ["tutorial", "how-to", "guide"]},
     "science": {"display_name": "Science", "category": "knowledge", "aliases": ["research", "experiment"]},
     "history": {"display_name": "History", "category": "knowledge", "aliases": ["historical", "archive"]},
     "documentary": {"display_name": "Documentary", "category": "knowledge", "aliases": ["doc", "docu"]},
