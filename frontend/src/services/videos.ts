@@ -124,6 +124,10 @@ export async function updateVideo(payload: UpdateVideoPayload): Promise<VideoIte
   return mapVideoApiItemToVideoItem(video)
 }
 
+export async function recordView(videoId: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/videos/${videoId}/view`, { method: 'POST' })
+}
+
 export async function deleteVideo(videoId: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/videos/${videoId}`, {
     method: 'DELETE',
