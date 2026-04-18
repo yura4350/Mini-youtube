@@ -56,6 +56,23 @@ function mapBackendUser(u: BackendUser): User {
   }
 }
 
+function parseApiErrorDetail(detail: unknown, fallback: string): string {
+  if (typeof detail === 'string' && detail.trim()) return detail
+  if (Array.isArray(detail) && detail.length > 0) {
+    const first = detail[0]
+    if (typeof first === 'string' && first.trim()) return first
+    if (first && typeof first === 'object' && 'msg' in first) {
+      const msg = (first as { msg?: unknown }).msg
+      if (typeof msg === 'string' && msg.trim()) return msg
+    }
+  }
+  if (detail && typeof detail === 'object' && 'msg' in detail) {
+    const msg = (detail as { msg?: unknown }).msg
+    if (typeof msg === 'string' && msg.trim()) return msg
+  }
+  return fallback
+}
+
 // Wrappers around the browser's localStorage API
 // NOTE: localStorage can only save text strings, when saving the user object, it uses JSON.stringify(user) to convert the object to a string. When getting the user back,
 // it uses JSON.parse(raw) to turn the string back into a usable JavaScript object
@@ -241,10 +258,10 @@ async function register(payload: RegisterPayload): Promise<AuthResult> {
     })
 
     if (!response.ok) {
-      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      const err = (await response.json().catch(() => null)) as { detail?: unknown } | null
       return {
         ok: false,
-        message: err?.detail ?? 'Registration failed.',
+        message: parseApiErrorDetail(err?.detail, 'Registration failed.'),
         user: null,
       }
     }

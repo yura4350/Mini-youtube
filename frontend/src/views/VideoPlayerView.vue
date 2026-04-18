@@ -267,6 +267,15 @@ function sendChatMessage() {
   chatInput.value = ''
 }
 
+function openUserProfileFromChat(userId: string) {
+  if (!userId) return
+  if (authStore.currentUser?.id === userId) {
+    void router.push({ name: 'profile' })
+    return
+  }
+  void router.push({ name: 'user-profile', params: { userId } })
+}
+
 const relatedVideos = computed(() => {
   if (!currentVideo.value) return []
   return allVideos.value
@@ -810,7 +819,15 @@ watch(
             :class="{ system: item.type === 'system' }"
           >
             <p class="chat-meta">
-              <strong>{{ item.username }}</strong>
+              <button
+                v-if="item.type !== 'system'"
+                type="button"
+                class="chat-user-link"
+                @click="openUserProfileFromChat(item.user_id)"
+              >
+                {{ item.username }}
+              </button>
+              <strong v-else>{{ item.username }}</strong>
               <small>{{ new Date(item.timestamp).toLocaleTimeString() }}</small>
             </p>
             <p class="chat-text">{{ item.message }}</p>
@@ -1381,6 +1398,23 @@ h1 {
 .chat-meta strong {
   color: var(--text-main);
   font-size: 13px;
+}
+
+.chat-user-link {
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.chat-user-link:hover {
+  color: var(--accent-text-strong);
 }
 
 .chat-meta small {

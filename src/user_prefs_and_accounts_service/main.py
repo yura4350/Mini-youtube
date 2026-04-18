@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignK
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship, mapped_column
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List, Any, Dict
 
 from passlib.context import CryptContext # Used to help with hashing and password verification
@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from fastapi.middleware.cors import CORSMiddleware
 
 import os
+import re
 from dotenv import load_dotenv
 
 load_dotenv() # Load the variables from .env file
@@ -93,11 +94,29 @@ def _ensure_users_schema() -> None:
 _ensure_users_schema()
 
 # Pydantic Models (Dataclass). Definitions of API Models
+PASSWORD_MIN_LENGTH = 8
+
+
+def validate_password_strength(password: str) -> str:
+    if len(password) < PASSWORD_MIN_LENGTH:
+        raise ValueError(f"Password must be at least {PASSWORD_MIN_LENGTH} characters.")
+    if not re.search(r"[A-Za-z]", password):
+        raise ValueError("Password must include at least one letter.")
+    if not re.search(r"\d", password):
+        raise ValueError("Password must include at least one number.")
+    return password
+
+
 class UserCreate(BaseModel):
     name:str
     email:str
     role:str
     password:str
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_password_strength(value)
 
 class UserUpdate(BaseModel):
     name:Optional[str] = None
@@ -447,7 +466,6 @@ def update_user_preferences(update_prefs:UserPreferencesUpdate, current_user:Use
     db.commit()
     db.refresh(user_prefs)
     return user_prefs
-
 
 
 

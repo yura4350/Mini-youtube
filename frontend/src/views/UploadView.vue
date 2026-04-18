@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { uploadVideo } from '@/services/videos'
@@ -7,14 +8,22 @@ import { toApiUploaderId } from '@/services/user-id'
 import { fetchAiTagTaxonomy, type AiTagTaxonomyItem } from '@/services/intelligence'
 
 const authStore = useAuthStore()
+const router = useRouter()
 const loading = ref(false)
-const successMessage = ref('')
 const errorMessage = ref('')
 const selectedFile = ref<File | null>(null)
 const videoDuration = ref<number>(0)
 const tagOptions = ref<AiTagTaxonomyItem[]>([])
 const tagLoading = ref(false)
 const selectedCanonicalTags = ref<string[]>([])
+const uploadSuccessModalOpen = ref(false)
+const uploadedVideoTitle = ref('')
+const uploadedVideoId = ref('')
+const uploadRedirectSeconds = ref(3)
+const isNavigatingAfterUpload = ref(false)
+let uploadRedirectTimer: ReturnType<typeof setTimeout> | null = null
+let uploadCountdownTimer: ReturnType<typeof setInterval> | null = null
+let uploadNavigateTimer: ReturnType<typeof setTimeout> | null = null
 
 const form = reactive({
   title: '',
@@ -102,7 +111,6 @@ function onFileChange(event: Event) {
 
 async function onSubmit() {
   errorMessage.value = ''
-  successMessage.value = ''
 
   if (!selectedFile.value) {
     errorMessage.value = 'Please choose a video file.'
@@ -128,7 +136,11 @@ async function onSubmit() {
       durationSeconds: videoDuration.value,
     })
 
-    successMessage.value = `Uploaded "${created.title}" successfully.`
+    uploadedVideoTitle.value = created.title
+    uploadedVideoId.value = created.id
+    isNavigatingAfterUpload.value = false
+    uploadSuccessModalOpen.value = true
+    startUploadRedirectCountdown()
     form.title = ''
     form.description = ''
     selectedCanonicalTags.value = []
@@ -143,29 +155,69 @@ async function onSubmit() {
 onMounted(() => {
   void loadTagTaxonomy()
 })
+
+onUnmounted(() => {
+  clearUploadRedirectTimers()
+})
+
+function clearUploadRedirectTimers() {
+  if (uploadRedirectTimer) {
+    clearTimeout(uploadRedirectTimer)
+    uploadRedirectTimer = null
+  }
+  if (uploadCountdownTimer) {
+    clearInterval(uploadCountdownTimer)
+    uploadCountdownTimer = null
+  }
+  if (uploadNavigateTimer) {
+    clearTimeout(uploadNavigateTimer)
+    uploadNavigateTimer = null
+  }
+}
+
+function goToUploadedVideoAfterUpload() {
+  if (isNavigatingAfterUpload.value) return
+  clearUploadRedirectTimers()
+  isNavigatingAfterUpload.value = true
+  const targetPath = uploadedVideoId.value ? `/video/${uploadedVideoId.value}` : '/profile'
+  uploadNavigateTimer = setTimeout(() => {
+    void router.push(targetPath)
+  }, 420)
+}
+
+function startUploadRedirectCountdown() {
+  clearUploadRedirectTimers()
+  uploadRedirectSeconds.value = 4
+  uploadCountdownTimer = setInterval(() => {
+    if (uploadRedirectSeconds.value <= 1) {
+      if (uploadCountdownTimer) {
+        clearInterval(uploadCountdownTimer)
+        uploadCountdownTimer = null
+      }
+      return
+    }
+    uploadRedirectSeconds.value -= 1
+  }, 1000)
+  uploadRedirectTimer = setTimeout(() => {
+    goToUploadedVideoAfterUpload()
+  }, 4000)
+}
 </script>
 
 <template>
   <main class="upload-page">
     <section class="upload-card">
       <h1><AppIcon name="upload" :size="22" /> Upload video</h1>
-      <p class="sub">Upload a video file and metadata to the Video CRUD service.</p>
-      <p class="subtle-note">
-        Category is auto-derived from your selected canonical tags.
-      </p>
-      <p class="subtle-note">
-        If you select tags manually, AI auto-tagging will be skipped for this upload. If you leave tags empty, AI
-        will generate tags automatically from your video transcript.
-      </p>
+      <p class="sub">Fields marked with * are required. Leave tags empty to let AI generate them.</p>
 
       <form class="form" @submit.prevent="onSubmit">
         <label>
-          Video file
+          <span class="label-line">Video file <span class="required-mark" aria-hidden="true">*</span></span>
           <input type="file" accept="video/*,.mp4,.webm,.mov" @change="onFileChange" required />
         </label>
 
         <label>
-          Title
+          <span class="label-line">Title <span class="required-mark" aria-hidden="true">*</span></span>
           <input v-model="form.title" type="text" placeholder="Enter video title" required />
         </label>
 
@@ -217,11 +269,25 @@ onMounted(() => {
       <p v-if="errorMessage" class="error">
         {{ errorMessage }}
       </p>
-
-      <p v-if="successMessage" class="ok">
-        <AppIcon name="check" :size="15" /> {{ successMessage }}
-      </p>
     </section>
+
+    <transition name="modal-fade">
+      <div v-if="uploadSuccessModalOpen" class="modal-mask" role="dialog" aria-modal="true" aria-labelledby="upload-success-title">
+        <div class="success-modal">
+          <div class="modal-icon"><AppIcon name="check" :size="18" /></div>
+          <h2 id="upload-success-title">Upload successful</h2>
+          <p v-if="!isNavigatingAfterUpload">
+            Your video
+            <strong>"{{ uploadedVideoTitle }}"</strong>
+            is uploaded. Redirecting to the video page in {{ uploadRedirectSeconds }}s.
+          </p>
+          <p v-else class="navigating-text">Opening your video...</p>
+          <button type="button" class="modal-btn" :disabled="isNavigatingAfterUpload" @click="goToUploadedVideoAfterUpload">
+            {{ isNavigatingAfterUpload ? 'Opening...' : 'Go to Video Now' }}
+          </button>
+        </div>
+      </div>
+    </transition>
   </main>
 </template>
 
@@ -245,22 +311,17 @@ h1 {
   gap: 8px;
   color: var(--text-main);
   font-size: 28px;
+  margin: 0;
 }
 
 .sub {
   color: var(--text-muted);
-  margin-top: 2px;
-}
-
-.subtle-note {
-  margin-top: 8px;
-  color: #cbd5e1;
-  font-size: 13px;
+  margin: 8px 0 0;
   line-height: 1.4;
 }
 
 .form {
-  margin-top: 18px;
+  margin-top: 16px;
   display: grid;
   gap: 12px;
 }
@@ -270,6 +331,17 @@ label {
   gap: 6px;
   color: var(--text-body);
   font-size: 14px;
+}
+
+.required-mark {
+  color: #f87171;
+  font-weight: 700;
+}
+
+.label-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 input,
@@ -347,16 +419,85 @@ select {
   color: #fff;
 }
 
-.ok {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 12px;
-  color: #9ff0b1;
-}
-
 .error {
   margin-top: 12px;
   color: var(--accent-text-mid);
+}
+
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.66);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 1000;
+}
+
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.22s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.success-modal {
+  width: min(460px, 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  background: linear-gradient(165deg, #111827, #0f172a);
+  box-shadow: 0 22px 50px rgba(2, 6, 23, 0.6);
+  padding: 18px;
+}
+
+.modal-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: #dcfce7;
+  background: rgba(34, 197, 94, 0.3);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  margin-bottom: 10px;
+}
+
+.success-modal h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  color: #ecfdf5;
+}
+
+.success-modal p {
+  margin: 0;
+  color: #d1fae5;
+  line-height: 1.45;
+}
+
+.navigating-text {
+  color: #bbf7d0;
+}
+
+.modal-btn {
+  margin-top: 14px;
+  border: none;
+  border-radius: 10px;
+  background: #22c55e;
+  color: #052e16;
+  font-weight: 700;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.modal-btn:hover {
+  background: #16a34a;
+}
+
+.modal-btn:disabled {
+  opacity: 0.75;
+  cursor: wait;
 }
 </style>

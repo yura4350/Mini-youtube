@@ -155,6 +155,15 @@ function pickPeer(peerId: string) {
   router.replace({ name: 'messages', query: { peer: peerId } })
 }
 
+function openUserProfile(userId: string) {
+  if (!userId) return
+  if (authStore.currentUser?.id === userId) {
+    void router.push({ name: 'profile' })
+    return
+  }
+  void router.push({ name: 'user-profile', params: { userId } })
+}
+
 async function refreshDirectoryAndSubscriptions() {
   const currentUser = authStore.currentUser
   if (!currentUser) {
@@ -235,7 +244,12 @@ watch(
             <AppIcon name="bell" :size="16" />
             {{ selectedPeer ? `Chat with ${selectedPeer.username}` : 'Direct Messages' }}
           </h1>
-          <span class="status">{{ status }}</span>
+          <div class="chat-header-actions">
+            <button v-if="selectedPeer" type="button" class="profile-jump-btn" @click="openUserProfile(selectedPeer.id)">
+              View profile
+            </button>
+            <span class="status">{{ status }}</span>
+          </div>
         </header>
         <p v-if="chatHint" class="chat-hint">{{ chatHint }}</p>
 
@@ -247,7 +261,9 @@ watch(
             :class="{ mine: authStore.currentUser?.id === item.sender_user_id }"
           >
             <p class="meta">
-              <strong>{{ item.sender_username }}</strong>
+              <button type="button" class="sender-link" @click="openUserProfile(item.sender_user_id)">
+                {{ item.sender_username }}
+              </button>
               <small>{{ new Date(item.timestamp).toLocaleTimeString() }}</small>
             </p>
             <p>{{ item.message }}</p>
@@ -348,6 +364,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
 }
 
 .chat-header h1 {
@@ -356,6 +373,27 @@ watch(
   align-items: center;
   gap: 6px;
   font-size: 18px;
+}
+
+.chat-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-jump-btn {
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--text-soft);
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.profile-jump-btn:hover {
+  border-color: var(--accent-outline-soft);
+  color: var(--text-main);
 }
 
 .status {
@@ -406,8 +444,21 @@ watch(
   font-size: 12px;
 }
 
-.msg strong {
+.sender-link {
+  border: none;
+  background: transparent;
   color: var(--text-main);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.sender-link:hover {
+  color: var(--accent-text-strong);
 }
 
 .msg p:last-child {
