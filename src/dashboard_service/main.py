@@ -1186,7 +1186,13 @@ def recommend(
     - With user_id and watch history: rank by tag overlap + recency + popularity.
     """
     logger.info("Recommend requested user_id=%s", user_id)
-    videos = db.query(Video).order_by(Video.created_at.desc()).all()
+    base_query = db.query(Video)
+    if user_id:
+        try:
+            base_query = base_query.filter(Video.uploader_id != int(user_id))
+        except (ValueError, TypeError):
+            pass
+    videos = base_query.order_by(Video.created_at.desc()).all()
     if not videos:
         return {"videos": []}
 
