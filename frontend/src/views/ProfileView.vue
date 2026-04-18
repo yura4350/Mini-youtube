@@ -5,12 +5,12 @@ import AppIcon from '@/components/icons/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { authService, applyDocumentUiTheme } from '@/services/auth'
 import { fetchVideos } from '@/services/videos'
-import { fetchSubscriptionsFeed } from '@/services/dashboard'
+import { fetchSubscriptionsFeed, fetchChannelSubscriberIds } from '@/services/dashboard'
 import type { VideoItem } from '@/types/video'
-import type { UserPreferencesDTO } from '@/types/auth'
+import type { User, UserPreferencesDTO } from '@/types/auth'
 
 const authStore = useAuthStore()
-const tab = ref<'videos' | 'subscriptions'>('videos')
+const tab = ref<'videos' | 'subscriptions' | 'subscribers'>('videos')
 const editMode = ref(false)
 const message = ref('')
 const loadingVideos = ref(false)
@@ -19,6 +19,9 @@ const loadingSubscriptions = ref(false)
 const subscriptionsError = ref('')
 const allVideos = ref<VideoItem[]>([])
 const subscriptionVideos = ref<VideoItem[]>([])
+const subscribers = ref<User[]>([])
+const loadingSubscribers = ref(false)
+const subscribersError = ref('')
 
 const form = reactive({
   username: '',
@@ -181,10 +184,33 @@ async function saveUiSettings() {
   prefsMessage.value = 'Appearance saved.'
 }
 
+async function loadSubscribers() {
+  if (!authStore.currentUser) return
+
+  loadingSubscribers.value = true
+  subscribersError.value = ''
+
+  try {
+    const subscriberIds = await fetchChannelSubscriberIds(authStore.currentUser.id)
+    if (subscriberIds.length === 0) {
+      subscribers.value = []
+      return
+    }
+    const allUsers = await authService.getAllUsers()
+    const idSet = new Set(subscriberIds)
+    subscribers.value = allUsers.filter((u) => idSet.has(u.id))
+  } catch (error) {
+    subscribersError.value = error instanceof Error ? error.message : 'Failed to load subscribers.'
+  } finally {
+    loadingSubscribers.value = false
+  }
+}
+
 onMounted(() => {
   loadVideos()
   loadSubscriptionsFeed()
   loadPreferences()
+  loadSubscribers()
 })
 </script>
 
@@ -221,6 +247,10 @@ onMounted(() => {
           <span
             ><AppIcon name="users" :size="14" />
             {{ authStore.currentUser.subscribedTo.length }} subscriptions</span
+          >
+          <span
+            ><AppIcon name="users" :size="14" />
+            {{ subscribers.length }} subscribers</span
           >
           <span
             ><AppIcon name="bell" :size="14" />
@@ -332,6 +362,9 @@ onMounted(() => {
       <button :class="{ active: tab === 'subscriptions' }" @click="tab = 'subscriptions'">
         <AppIcon name="users" :size="14" /> Subscriptions
       </button>
+      <button :class="{ active: tab === 'subscribers' }" @click="tab = 'subscribers'">
+        <AppIcon name="users" :size="14" /> Subscribers
+      </button>
       <RouterLink to="/notifications" class="inbox-link">
         <AppIcon name="bell" :size="14" /> Open notification inbox
       </RouterLink>
@@ -349,6 +382,21 @@ onMounted(() => {
       <p v-else-if="subscriptionsError" class="muted">{{ subscriptionsError }}</p>
       <VideoCard v-for="video in subscriptionVideos" :key="video.id" :video="video" />
       <p v-if="!loadingSubscriptions && !subscriptionsError && subscriptionVideos.length === 0" class="muted">No videos from subscriptions yet.</p>
+    </section>
+
+    <section v-if="tab === 'subscribers'" class="subscriber-grid">
+      <p v-if="loadingSubscribers" class="muted">Loading subscribers...</p>
+      <p v-else-if="subscribersError" class="muted">{{ subscribersError }}</p>
+      <RouterLink
+        v-for="sub in subscribers"
+        :key="sub.id"
+        :to="`/users/${sub.id}`"
+        class="subscriber-card"
+      >
+        <img :src="sub.avatar" :alt="sub.username" class="sub-avatar" />
+        <span class="sub-name">{{ sub.username }}</span>
+      </RouterLink>
+      <p v-if="!loadingSubscribers && !subscribersError && subscribers.length === 0" class="muted">No subscribers yet.</p>
     </section>
 
     <p v-if="message" class="ok">{{ message }}</p>
@@ -597,6 +645,47 @@ button.ghost {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
+}
+
+.subscriber-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.subscriber-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-1);
+  text-decoration: none;
+  color: var(--text-body);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.subscriber-card:hover {
+  background: var(--accent-wash);
+  border-color: var(--accent-outline-soft);
+  color: var(--text-main);
+}
+
+.sub-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.sub-name {
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  word-break: break-word;
 }
 
 .muted {
