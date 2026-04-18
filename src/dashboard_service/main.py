@@ -977,6 +977,25 @@ def subscriptions_feed(
     return {"user_id": user_id, "videos": [serialize_video(v) for v in videos]}
 
 
+@app.get("/subscriptions/channel-subscribers")
+def list_channel_subscribers(
+    channel_user_id: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    """List subscriber user IDs for the given channel (users who subscribed to this channel)."""
+    rows = (
+        db.query(Subscription)
+        .filter(Subscription.channel_user_id == channel_user_id)
+        .order_by(Subscription.created_at.desc())
+        .all()
+    )
+    return {
+        "channel_user_id": channel_user_id,
+        "subscriber_user_ids": [row.subscriber_user_id for row in rows],
+        "count": len(rows),
+    }
+
+
 @app.get("/subscriptions")
 def list_subscriptions(
     user_id: str = Query(..., min_length=1),

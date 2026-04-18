@@ -179,6 +179,19 @@ export async function fetchSubscribedChannelIds(userId: string): Promise<string[
   return payload.channel_user_ids
 }
 
+export async function fetchChannelSubscriberIds(channelUserId: string): Promise<string[]> {
+  const response = await fetch(
+    `${DASHBOARD_API_BASE_URL}/subscriptions/channel-subscribers?channel_user_id=${encodeURIComponent(channelUserId)}`,
+  )
+
+  if (!response.ok) {
+    throw new Error(await parseError(response))
+  }
+
+  const payload = (await response.json()) as { channel_user_id: string; subscriber_user_ids: string[] }
+  return payload.subscriber_user_ids
+}
+
 export async function subscribeToChannel(subscriberUserId: string, channelUserId: string): Promise<void> {
   const response = await fetch(
     `${DASHBOARD_API_BASE_URL}/subscriptions?subscriber_user_id=${encodeURIComponent(subscriberUserId)}&channel_user_id=${encodeURIComponent(channelUserId)}`,
