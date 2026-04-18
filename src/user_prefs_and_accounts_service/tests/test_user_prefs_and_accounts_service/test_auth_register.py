@@ -97,3 +97,17 @@ def test_register_user_invalid_payload_returns_422(client):
     r = client.post("/auth/register", json=payload)
 
     assert r.status_code == 422
+
+
+def test_register_user_weak_password_returns_422(client):
+    payload = {
+        "name": "WeakPasswordUser",
+        "email": "weak@example.com",
+        "role": "user",
+        "password": "password",
+    }
+
+    r = client.post("/auth/register", json=payload)
+
+    assert r.status_code == 422
+    assert "number" in str(r.json()).lower()

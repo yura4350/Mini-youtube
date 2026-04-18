@@ -86,7 +86,7 @@ router.beforeEach((to) => {
   }
 
   if (to.meta.guestOnly && loggedIn) {
-    return { name: 'profile' }
+    return { name: 'home' }
   }
 
   return true

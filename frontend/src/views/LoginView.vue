@@ -27,7 +27,7 @@ async function onSubmit() {
     return
   }
 
-  router.push('/profile')
+  router.push('/')
 }
 </script>
 
@@ -64,7 +64,7 @@ async function onSubmit() {
 
       <div class="demo-box">
         <p>Demo account: tech@example.com or admin@example.com</p>
-        <p>Password: any non-empty text</p>
+        <p>Password: at least 8 characters with letters and numbers</p>
       </div>
     </div>
   </section>
