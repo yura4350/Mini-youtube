@@ -3,7 +3,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AppIcon from '@/components/icons/AppIcon.vue'
-import { fetchNotifications } from '@/services/notifications'
+import { connectNotificationStream, fetchNotifications } from '@/services/notifications'
+import { fetchSearchSuggestions, fetchSubscribedChannelIds } from '@/services/dashboard'
 import { authService } from '@/services/auth'
 import type { NotificationItem } from '@/types/notification'
 import type { User } from '@/types/auth'
@@ -12,13 +13,55 @@ const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 const searchInput = ref('')
+const suggestions = ref<string[]>([])
+const showSuggestions = ref(false)
+let suggestionsDebounce: ReturnType<typeof setTimeout> | null = null
 const unreadNotificationCount = ref(0)
 const notificationOpen = ref(false)
 const notificationLoading = ref(false)
 const recentNotifications = ref<NotificationItem[]>([])
 const notificationCenterRef = ref<HTMLElement | null>(null)
+let disconnectNotificationStream: (() => void) | null = null
+let notificationStreamReconnectTimer: ReturnType<typeof setTimeout> | null = null
+const notificationStreamUserId = ref<string | null>(null)
+const notificationStreamShouldReconnect = ref(false)
+let notificationFallbackPollTimer: ReturnType<typeof setInterval> | null = null
+const allUsers = ref<User[]>([])
+
+const QUICK_NOTIFICATION_TITLE_MAX_LENGTH = 72
 
 const showSearch = computed(() => route.name !== 'login' && route.name !== 'register')
+
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value
+  return `${value.slice(0, maxLength - 3).trimEnd()}...`
+}
+
+function quickNotificationTitle(value: string): string {
+  return truncateText(value, QUICK_NOTIFICATION_TITLE_MAX_LENGTH)
+}
+
+async function refreshUserDirectory() {
+  if (!authStore.currentUser) {
+    allUsers.value = []
+    return
+  }
+  allUsers.value = await authService.getAllUsers()
+}
+
+async function refreshSubscribedChannels() {
+  const currentUser = authStore.currentUser
+  if (!currentUser) return
+
+  try {
+    const channelIds = await fetchSubscribedChannelIds(currentUser.id)
+    if (authStore.currentUser?.id === currentUser.id) {
+      authStore.currentUser.subscribedTo = channelIds
+    }
+  } catch {
+    // Keep existing values if sync fails.
+  }
+}
 
 async function refreshUnreadNotifications() {
   if (!authStore.currentUser) {
@@ -44,7 +87,7 @@ const quickPeers = computed<User[]>(() => {
   const currentUser = authStore.currentUser
   if (!currentUser) return []
 
-  const users = authService.getAllUsers().filter((user) => user.id !== currentUser.id)
+  const users = allUsers.value.filter((user) => user.id !== currentUser.id)
   const subscribed = new Set(currentUser.subscribedTo)
   const preferred = users.filter((user) => subscribed.has(user.id))
   const source = preferred.length > 0 ? preferred : users
@@ -104,9 +147,70 @@ function handleNotificationsUpdated() {
   refreshUnreadNotifications()
 }
 
+function stopNotificationStream() {
+  if (disconnectNotificationStream) {
+    disconnectNotificationStream()
+    disconnectNotificationStream = null
+  }
+  if (notificationStreamReconnectTimer) {
+    clearTimeout(notificationStreamReconnectTimer)
+    notificationStreamReconnectTimer = null
+  }
+  notificationStreamShouldReconnect.value = false
+  notificationStreamUserId.value = null
+  if (notificationFallbackPollTimer) {
+    clearInterval(notificationFallbackPollTimer)
+    notificationFallbackPollTimer = null
+  }
+}
+
+function startNotificationStream(userId: string) {
+  stopNotificationStream()
+  notificationStreamUserId.value = userId
+  notificationStreamShouldReconnect.value = true
+
+  const connect = () => {
+    if (!notificationStreamShouldReconnect.value || notificationStreamUserId.value !== userId) return
+
+    disconnectNotificationStream = connectNotificationStream({
+      userId,
+      onNotification: () => {
+        refreshUnreadNotifications()
+        if (notificationOpen.value) {
+          openNotificationCenter()
+        }
+        window.dispatchEvent(new CustomEvent('notifications-updated'))
+      },
+      onStatusChange: (status) => {
+        if (status === 'error' || status === 'disconnected') {
+          if (!notificationStreamShouldReconnect.value || notificationStreamUserId.value !== userId) return
+          if (notificationStreamReconnectTimer) clearTimeout(notificationStreamReconnectTimer)
+          notificationStreamReconnectTimer = setTimeout(connect, 1500)
+        }
+      },
+    })
+  }
+
+  connect()
+
+  // Fallback: keep unread badge in sync even if WS is blocked/intermittent.
+  if (notificationFallbackPollTimer) {
+    clearInterval(notificationFallbackPollTimer)
+  }
+  notificationFallbackPollTimer = setInterval(() => {
+    if (authStore.currentUser?.id !== userId) return
+    refreshUnreadNotifications()
+    if (notificationOpen.value) {
+      openNotificationCenter()
+    }
+  }, 7000)
+}
+
 onMounted(() => {
   authStore.hydrate()
   refreshUnreadNotifications()
+  refreshUserDirectory()
+  refreshSubscribedChannels()
   window.addEventListener('notifications-updated', handleNotificationsUpdated)
   window.addEventListener('click', closeNotificationCenterByOutsideClick)
 })
@@ -114,23 +218,60 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('notifications-updated', handleNotificationsUpdated)
   window.removeEventListener('click', closeNotificationCenterByOutsideClick)
+  stopNotificationStream()
 })
 
 watch(
   () => authStore.currentUser?.id,
-  () => {
+  (userId) => {
     refreshUnreadNotifications()
+    if (!userId) {
+      allUsers.value = []
+      stopNotificationStream()
+      return
+    }
+    startNotificationStream(userId)
+    refreshUserDirectory()
+    refreshSubscribedChannels()
   },
+  { immediate: true },
 )
 
 function logout() {
+  stopNotificationStream()
   authStore.logout()
   router.push('/login')
+}
+
+function onSearchInput() {
+  const q = searchInput.value.trim()
+  if (suggestionsDebounce) clearTimeout(suggestionsDebounce)
+  if (!q) {
+    suggestions.value = []
+    showSuggestions.value = false
+    return
+  }
+  suggestionsDebounce = setTimeout(async () => {
+    try {
+      suggestions.value = await fetchSearchSuggestions(q)
+      showSuggestions.value = suggestions.value.length > 0
+    } catch {
+      suggestions.value = []
+      showSuggestions.value = false
+    }
+  }, 200)
+}
+
+function selectSuggestion(s: string) {
+  searchInput.value = s
+  showSuggestions.value = false
+  router.push({ name: 'search', query: { q: s } })
 }
 
 function submitSearch() {
   const keyword = searchInput.value.trim()
   if (!keyword) return
+  showSuggestions.value = false
   router.push({ name: 'search', query: { q: keyword } })
 }
 </script>
@@ -144,7 +285,23 @@ function submitSearch() {
       </RouterLink>
 
       <form v-if="showSearch" class="searchbar" @submit.prevent="submitSearch">
-        <input v-model="searchInput" type="text" placeholder="Search videos" />
+        <div class="search-input-wrap">
+          <input
+            v-model="searchInput"
+            type="text"
+            placeholder="Search videos"
+            autocomplete="off"
+            @input="onSearchInput"
+            @blur="showSuggestions = false"
+          />
+          <ul v-if="showSuggestions" class="suggestions-list">
+            <li
+              v-for="s in suggestions"
+              :key="s"
+              @mousedown.prevent="selectSuggestion(s)"
+            >{{ s }}</li>
+          </ul>
+        </div>
         <button type="submit" class="search-btn"><AppIcon name="search" :size="16" /> Search</button>
       </form>
 
@@ -180,7 +337,7 @@ function submitSearch() {
                 :class="{ unread: !item.isRead }"
                 @click="goToInbox"
               >
-                <p>{{ item.title }}</p>
+                <p>{{ quickNotificationTitle(item.title) }}</p>
                 <small>{{ new Date(item.createdAt).toLocaleString() }}</small>
               </article>
             </div>
@@ -237,8 +394,8 @@ function submitSearch() {
   align-items: center;
   justify-content: space-between;
   backdrop-filter: blur(8px);
-  background: rgba(7, 8, 10, 0.8);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--topbar-bg);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .searchbar {
@@ -250,19 +407,51 @@ function submitSearch() {
   margin: 0 16px;
 }
 
+.search-input-wrap {
+  position: relative;
+}
+
 .searchbar input {
+  width: 100%;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: #121212;
-  color: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-3);
+  color: var(--text-main);
   padding: 9px 14px;
+}
+
+.suggestions-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg-1);
+  border: 1px solid var(--border-medium);
+  border-radius: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  z-index: 20;
+  box-shadow: var(--shadow-dropdown);
+}
+
+.suggestions-list li {
+  padding: 8px 14px;
+  color: var(--text-subtle);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.suggestions-list li:hover {
+  background: var(--overlay-hover);
+  color: var(--text-main);
 }
 
 .searchbar button {
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: #202020;
-  color: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text-main);
   padding: 9px 14px;
   cursor: pointer;
 }
@@ -278,7 +467,7 @@ function submitSearch() {
   align-items: center;
   gap: 8px;
   font-size: 20px;
-  color: #fff;
+  color: var(--text-main);
   text-decoration: none;
   letter-spacing: 0.03em;
   font-weight: 700;
@@ -291,7 +480,8 @@ function submitSearch() {
   display: grid;
   place-items: center;
   font-size: 11px;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
 }
 
 .topnav {
@@ -304,7 +494,7 @@ function submitSearch() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #d4d7de;
+  color: var(--text-subtle);
   text-decoration: none;
   font-size: 14px;
   padding: 8px 10px;
@@ -323,7 +513,7 @@ function submitSearch() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #d4d7de;
+  color: var(--text-subtle);
   border: none;
   background: transparent;
   font-size: 14px;
@@ -333,8 +523,8 @@ function submitSearch() {
 }
 
 .notify-trigger:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--overlay-hover-mid);
+  color: var(--text-main);
 }
 
 .notify-icon-wrap {
@@ -353,8 +543,8 @@ function submitSearch() {
   font-size: 11px;
   display: grid;
   place-items: center;
-  background: #ef4444;
-  color: #fff;
+  background: var(--accent-soft);
+  color: var(--text-inverse);
   border: 1px solid rgba(0, 0, 0, 0.45);
 }
 
@@ -364,10 +554,10 @@ function submitSearch() {
   top: calc(100% + 8px);
   width: 320px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #141414;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-2);
   padding: 10px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.38);
+  box-shadow: var(--shadow-dropdown-lg);
 }
 
 .notify-dropdown header {
@@ -377,14 +567,14 @@ function submitSearch() {
 }
 
 .notify-dropdown h3 {
-  color: #fff;
+  color: var(--text-main);
   font-size: 14px;
 }
 
 .mini-btn {
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid var(--border-heavy);
   background: transparent;
-  color: #f3f4f6;
+  color: var(--text-main);
   border-radius: 7px;
   padding: 4px 8px;
   font-size: 12px;
@@ -392,7 +582,7 @@ function submitSearch() {
 }
 
 .dropdown-loading {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 13px;
   margin-top: 8px;
 }
@@ -401,32 +591,38 @@ function submitSearch() {
   margin-top: 8px;
   display: grid;
   gap: 6px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .dropdown-item {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 8px;
   cursor: pointer;
 }
 
 .dropdown-item.unread {
-  border-color: rgba(239, 68, 68, 0.65);
-  background: rgba(220, 38, 38, 0.16);
+  border-color: var(--accent-outline);
+  background: var(--accent-wash);
 }
 
 .dropdown-item p {
-  color: #e5e7eb;
+  color: var(--text-body);
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dropdown-item small {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 11px;
 }
 
 .dropdown-separator {
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid var(--border-default);
   margin: 10px 0;
 }
 
@@ -438,9 +634,9 @@ function submitSearch() {
 }
 
 .peer-chip {
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: #1d1d1d;
-  color: #e5e7eb;
+  border: 1px solid var(--border-medium);
+  background: var(--surface-chip);
+  color: var(--text-body);
   border-radius: 999px;
   padding: 5px 10px;
   font-size: 12px;
@@ -448,23 +644,23 @@ function submitSearch() {
 }
 
 .peer-chip:hover {
-  border-color: rgba(239, 68, 68, 0.75);
-  background: rgba(220, 38, 38, 0.18);
+  border-color: var(--accent-outline-soft);
+  background: var(--accent-wash-hover);
 }
 
 .topnav a.router-link-exact-active,
 .topnav a:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--overlay-hover-mid);
+  color: var(--text-main);
 }
 
 .logout-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid var(--border-extra);
   background: transparent;
-  color: #fff;
+  color: var(--text-main);
   border-radius: 8px;
   padding: 8px 10px;
   cursor: pointer;

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { authService } from '@/services/auth'
+import { fetchSubscribedChannelIds } from '@/services/dashboard'
 import type { User } from '@/types/auth'
 
 interface DirectMessage {
@@ -38,6 +39,7 @@ const selectedPeerId = ref('')
 const messages = ref<DirectMessage[]>([])
 const inputMessage = ref('')
 const status = ref('Disconnected')
+const chatHint = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
 let socket: WebSocket | null = null
 
@@ -87,6 +89,7 @@ function connectSocket() {
   })
 
   status.value = 'Connecting...'
+  chatHint.value = ''
   messages.value = []
   socket = new WebSocket(`${wsBase}/comm/direct-chat?${query.toString()}`)
 
@@ -109,11 +112,16 @@ function connectSocket() {
       }
 
       if (payload.type === 'error') {
-        status.value = payload.message
+        if (payload.message.includes('only send one message')) {
+          chatHint.value = 'You can send only one message unless both users follow each other.'
+        } else {
+          status.value = payload.message
+        }
         return
       }
 
       if (isDirectMessagePayload(payload)) {
+        chatHint.value = ''
         messages.value.push(payload)
         await nextTick()
         scrollBottom()
@@ -137,6 +145,7 @@ function sendMessage() {
   const message = inputMessage.value.trim()
   if (!message) return
 
+  chatHint.value = ''
   socket.send(JSON.stringify({ message }))
   inputMessage.value = ''
 }
@@ -146,12 +155,39 @@ function pickPeer(peerId: string) {
   router.replace({ name: 'messages', query: { peer: peerId } })
 }
 
-onMounted(() => {
-  authStore.hydrate()
-  users.value = authService.getAllUsers()
+function openUserProfile(userId: string) {
+  if (!userId) return
+  if (authStore.currentUser?.id === userId) {
+    void router.push({ name: 'profile' })
+    return
+  }
+  void router.push({ name: 'user-profile', params: { userId } })
+}
+
+async function refreshDirectoryAndSubscriptions() {
+  const currentUser = authStore.currentUser
+  if (!currentUser) {
+    users.value = []
+    return
+  }
+
+  users.value = await authService.getAllUsers()
+  try {
+    const subscribedIds = await fetchSubscribedChannelIds(currentUser.id)
+    if (authStore.currentUser?.id === currentUser.id) {
+      authStore.currentUser.subscribedTo = subscribedIds
+    }
+  } catch {
+    // Keep existing values when fetch fails.
+  }
+}
+
+onMounted(async () => {
+  await authStore.hydrate()
+  await refreshDirectoryAndSubscriptions()
 
   const peerFromQuery = typeof route.query.peer === 'string' ? route.query.peer : ''
-  if (peerFromQuery) {
+  if (peerFromQuery && peers.value.some((peer) => peer.id === peerFromQuery)) {
     selectedPeerId.value = peerFromQuery
   } else if (peers.value[0]) {
     selectedPeerId.value = peers.value[0].id
@@ -168,6 +204,13 @@ watch(
   () => selectedPeerId.value,
   () => {
     connectSocket()
+  },
+)
+
+watch(
+  () => authStore.currentUser?.id,
+  async () => {
+    await refreshDirectoryAndSubscriptions()
   },
 )
 </script>
@@ -201,8 +244,14 @@ watch(
             <AppIcon name="bell" :size="16" />
             {{ selectedPeer ? `Chat with ${selectedPeer.username}` : 'Direct Messages' }}
           </h1>
-          <span class="status">{{ status }}</span>
+          <div class="chat-header-actions">
+            <button v-if="selectedPeer" type="button" class="profile-jump-btn" @click="openUserProfile(selectedPeer.id)">
+              View profile
+            </button>
+            <span class="status">{{ status }}</span>
+          </div>
         </header>
+        <p v-if="chatHint" class="chat-hint">{{ chatHint }}</p>
 
         <div ref="messagesContainer" class="chat-messages">
           <article
@@ -212,7 +261,9 @@ watch(
             :class="{ mine: authStore.currentUser?.id === item.sender_user_id }"
           >
             <p class="meta">
-              <strong>{{ item.sender_username }}</strong>
+              <button type="button" class="sender-link" @click="openUserProfile(item.sender_user_id)">
+                {{ item.sender_username }}
+              </button>
               <small>{{ new Date(item.timestamp).toLocaleTimeString() }}</small>
             </p>
             <p>{{ item.message }}</p>
@@ -251,9 +302,9 @@ watch(
 
 .contact-list,
 .chat-panel {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-default);
   border-radius: 14px;
-  background: #1a1a1a;
+  background: var(--bg-1);
 }
 
 .contact-list {
@@ -261,7 +312,7 @@ watch(
 }
 
 .contact-list h2 {
-  color: #f4f5f8;
+  color: var(--text-main);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -270,9 +321,9 @@ watch(
 
 .contact-item {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #141414;
-  color: #e5e7eb;
+  border: 1px solid var(--border-default);
+  background: var(--bg-2);
+  color: var(--text-body);
   border-radius: 10px;
   padding: 8px;
   display: flex;
@@ -283,8 +334,8 @@ watch(
 }
 
 .contact-item.active {
-  border-color: rgba(239, 68, 68, 0.7);
-  background: rgba(220, 38, 38, 0.2);
+  border-color: var(--accent-outline-soft);
+  background: var(--accent-wash-hover);
 }
 
 .avatar {
@@ -294,12 +345,12 @@ watch(
 }
 
 .name {
-  color: #fff;
+  color: var(--text-main);
 }
 
 .contact-item small,
 .empty {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .chat-panel {
@@ -309,26 +360,58 @@ watch(
 
 .chat-header {
   padding: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-faint);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
 }
 
 .chat-header h1 {
-  color: #fff;
+  color: var(--text-main);
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 18px;
 }
 
-.status {
-  border: 1px solid rgba(255, 255, 255, 0.2);
+.chat-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-jump-btn {
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
-  color: #cfd5df;
+  background: var(--bg-3);
+  color: var(--text-soft);
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.profile-jump-btn:hover {
+  border-color: var(--accent-outline-soft);
+  color: var(--text-main);
+}
+
+.status {
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-soft);
   font-size: 12px;
   padding: 2px 8px;
+}
+
+.chat-hint {
+  margin: 10px 12px 0;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--warn-text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
 }
 
 .chat-messages {
@@ -340,8 +423,8 @@ watch(
 .msg {
   max-width: 72%;
   margin-bottom: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #121212;
+  border: 1px solid var(--border-default);
+  background: var(--bg-3);
   border-radius: 10px;
   padding: 8px;
 }
@@ -349,7 +432,7 @@ watch(
 .msg.mine {
   margin-left: auto;
   border-color: rgba(239, 68, 68, 0.6);
-  background: rgba(220, 38, 38, 0.18);
+  background: var(--accent-wash-hover);
 }
 
 .meta {
@@ -357,23 +440,36 @@ watch(
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
-.msg strong {
-  color: #fff;
+.sender-link {
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.sender-link:hover {
+  color: var(--accent-text-strong);
 }
 
 .msg p:last-child {
   margin-top: 3px;
-  color: #e5e7eb;
+  color: var(--text-body);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .composer {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-faint);
   padding: 10px;
   display: grid;
   grid-template-columns: 1fr auto;
@@ -382,17 +478,17 @@ watch(
 
 .composer input {
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: #101010;
-  color: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-4);
+  color: var(--text-main);
   padding: 9px 12px;
 }
 
 .composer button {
   border-radius: 999px;
   border: none;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
-  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+  color: var(--text-inverse);
   padding: 8px 14px;
 }
 

@@ -1,6 +1,6 @@
 export interface NotificationApiItem {
   notification_id: string
-  type: 'new_video' | 'subscription'
+  type: 'new_video' | 'subscription' | 'direct_message'
   recipient_user_id: string
   title: string
   message: string
@@ -21,7 +21,7 @@ export interface NotificationListResponse {
 
 export interface NotificationItem {
   id: string
-  type: 'new_video' | 'subscription'
+  type: 'new_video' | 'subscription' | 'direct_message'
   title: string
   message: string
   recipientUserId: string

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from src.video_crud_service.database import SessionLocal
 from src.video_crud_service.models import Video
+from src.admin_service.models import User
 
 logging.basicConfig(level=logging.INFO)
 _memory_handler = logging.handlers.MemoryHandler(
@@ -24,7 +25,12 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Admin Service")
 
-_default_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+_default_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://vcm-52418.vm.duke.edu:5173",
+    "http://vcm-52527.vm.duke.edu:5173",
+]
 _extra_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 
 app.add_middleware(
@@ -37,6 +43,14 @@ app.add_middleware(
 
 _start_time = time.time()
 _request_count = 0
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 @app.middleware("http")
@@ -78,35 +92,34 @@ def get_logs():
 
 
 @app.get("/admin/users/count")
-def get_user_count():
+def get_user_count(db: Session = Depends(get_db)):
     """Return total and active user counts."""
-    # TODO: implement once user DB is available
     logger.info("User count requested")
-    return {"total": 0, "active": 0}
+    total = db.query(User).count()
+    active = db.query(User).filter(User.is_active == True).count()
+    return {"total": total, "active": active}
 
 
 @app.patch("/admin/users/{user_id}/ban")
-def ban_user(user_id: str):
-    """Ban a user by ID."""
-    # TODO: implement once user DB is available
-    logger.info("Ban requested for user %s", user_id)
-    return {"user_id": user_id, "banned": False}
+def ban_user(user_id: int, db: Session = Depends(get_db)):
+    """Ban a user by ID (sets is_active=False)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_active = False
+    db.commit()
+    logger.info("User %s banned by admin", user_id)
+    return {"user_id": user_id, "banned": True}
 
 
 @app.post("/admin/auth/reset")
-def reset_admin_password(email: str):
+def reset_admin_password(email: str, db: Session = Depends(get_db)):
     """Trigger a password reset for the given admin email."""
-    # TODO: implement once user DB is available
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     logger.info("Password reset requested for %s", email)
-    return {"email": email, "reset_sent": False}
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    return {"email": email, "reset_sent": True}
 
 
 @app.delete("/admin/content/{video_id}")

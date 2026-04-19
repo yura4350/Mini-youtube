@@ -1,6 +1,18 @@
 import { mapVideoApiItemToVideoItem, type VideoApiItem, type VideoItem } from '@/types/video'
+import { authService } from '@/services/auth'
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
+const DEFAULT_HOST =
+  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? '127.0.0.1'
+    : typeof window !== 'undefined'
+      ? window.location.hostname
+      : 'localhost'
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || `http://${DEFAULT_HOST}:8000`).replace(/\/$/, '')
+
+function getAuthHeader(): Record<string, string> {
+  const token = authService.getToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 async function parseError(response: Response): Promise<string> {
   try {
@@ -14,14 +26,26 @@ async function parseError(response: Response): Promise<string> {
 }
 
 export async function fetchVideos(): Promise<VideoItem[]> {
-  const response = await fetch(`${API_BASE_URL}/videos`)
+  const [response, users] = await Promise.all([
+    fetch(`${API_BASE_URL}/videos`),
+    authService.getAllUsers(),
+  ])
 
   if (!response.ok) {
     throw new Error(await parseError(response))
   }
 
+  const userMap = new Map(users.map((u) => [u.id, u]))
   const payload = (await response.json()) as VideoApiItem[]
-  return payload.map(mapVideoApiItemToVideoItem)
+  return payload.map((v) => {
+    const item = mapVideoApiItemToVideoItem(v)
+    const user = userMap.get(String(v.uploader_id))
+    if (user) {
+      item.authorName = user.username
+      item.authorAvatar = user.avatar
+    }
+    return item
+  })
 }
 
 export async function fetchVideoById(videoId: string): Promise<VideoItem> {
@@ -32,7 +56,33 @@ export async function fetchVideoById(videoId: string): Promise<VideoItem> {
   }
 
   const payload = (await response.json()) as VideoApiItem
-  return mapVideoApiItemToVideoItem(payload)
+  const item = mapVideoApiItemToVideoItem(payload)
+  const result = await authService.fetchPublicProfile(payload.uploader_id)
+  if (result.ok) {
+    item.authorName = result.user.username
+    item.authorAvatar = result.user.avatar
+  }
+  return item
+}
+
+export interface VideoTranscriptItem {
+  video_id: string
+  status: 'pending' | 'queued' | 'processing' | 'ready' | 'failed'
+  transcript_text: string
+  source: string | null
+  error_message: string | null
+  language: string | null
+  updated_at: string | null
+}
+
+export async function fetchVideoTranscript(videoId: string): Promise<VideoTranscriptItem> {
+  const response = await fetch(`${API_BASE_URL}/videos/${videoId}/transcript`)
+
+  if (!response.ok) {
+    throw new Error(await parseError(response))
+  }
+
+  return (await response.json()) as VideoTranscriptItem
 }
 
 export interface UploadVideoPayload {
@@ -67,7 +117,13 @@ export async function uploadVideo(payload: UploadVideoPayload): Promise<VideoIte
   }
 
   const video = (await response.json()) as VideoApiItem
-  return mapVideoApiItemToVideoItem(video)
+  const item = mapVideoApiItemToVideoItem(video)
+  const currentUser = authService.getCurrentUser()
+  if (currentUser) {
+    item.authorName = currentUser.username
+    item.authorAvatar = currentUser.avatar
+  }
+  return item
 }
 
 export interface UpdateVideoPayload {
@@ -87,6 +143,7 @@ export async function updateVideo(payload: UpdateVideoPayload): Promise<VideoIte
 
   const response = await fetch(`${API_BASE_URL}/videos/${payload.videoId}`, {
     method: 'PATCH',
+    headers: getAuthHeader(),
     body: formData,
   })
 
@@ -95,12 +152,23 @@ export async function updateVideo(payload: UpdateVideoPayload): Promise<VideoIte
   }
 
   const video = (await response.json()) as VideoApiItem
-  return mapVideoApiItemToVideoItem(video)
+  const item = mapVideoApiItemToVideoItem(video)
+  const currentUser = authService.getCurrentUser()
+  if (currentUser) {
+    item.authorName = currentUser.username
+    item.authorAvatar = currentUser.avatar
+  }
+  return item
+}
+
+export async function recordView(videoId: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/videos/${videoId}/view`, { method: 'POST' })
 }
 
 export async function deleteVideo(videoId: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/videos/${videoId}`, {
     method: 'DELETE',
+    headers: getAuthHeader(),
   })
 
   if (!response.ok) {

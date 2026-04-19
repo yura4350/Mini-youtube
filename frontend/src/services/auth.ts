@@ -1,13 +1,46 @@
-import type { AuthResult, LoginPayload, RegisterPayload, User, BackendUser, BackendToken } from '@/types/auth'
+import type {
+  AuthResult,
+  LoginPayload,
+  RegisterPayload,
+  User,
+  BackendUser,
+  BackendToken,
+  UserPreferencesDTO,
+  UserPreferencesPatch,
+  PreferencesUpdateResult,
+} from '@/types/auth'
 
 // Use the environment variable of where the backend is hosted
+const DEFAULT_HOST =
+  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? '127.0.0.1'
+    : typeof window !== 'undefined'
+      ? window.location.hostname
+      : 'localhost'
 const AUTH_API_BASE_URL = (
-  import.meta.env.VITE_AUTH_API_BASE_URL || 'http://localhost:8003'
+  import.meta.env.VITE_AUTH_API_BASE_URL || `http://${DEFAULT_HOST}:8003`
 ).replace(/\/$/, '')
 
 // Simple String constants, names to save and retrieve data in the browser's localStorage
 const ACCESS_TOKEN_KEY = 'media_frontend_access_token'
 const CURRENT_USER_KEY = 'media_frontend_current_user'
+
+const DEFAULT_AVATAR_URL =
+  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
+
+const AVATAR_FILE_PREFIX = '/user/profile/avatar/file/'
+
+/** Turn stored profile paths into a browser-usable URL (uploads live under /file/{userId}/{filename}). */
+function resolveAvatarUrl(avatar: string | null | undefined, backendUserId: number): string {
+  if (avatar == null || avatar === '') return DEFAULT_AVATAR_URL
+  if (avatar.startsWith('http://') || avatar.startsWith('https://')) return avatar
+  if (avatar.startsWith(AVATAR_FILE_PREFIX)) {
+    const filename = avatar.slice(AVATAR_FILE_PREFIX.length)
+    return `${AUTH_API_BASE_URL}${AVATAR_FILE_PREFIX}${backendUserId}/${filename}`
+  }
+  if (avatar.startsWith('/')) return `${AUTH_API_BASE_URL}${avatar}`
+  return avatar
+}
 
 // Maps the data returned by a backend to the frontend
 function mapBackendUser(u: BackendUser): User {
@@ -15,12 +48,29 @@ function mapBackendUser(u: BackendUser): User {
     id: String(u.id),
     username: u.name,
     email: u.email,
-    bio: '',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+    bio: u.bio ?? '',
+    avatar: resolveAvatarUrl(u.avatar, u.id),
     isAdmin: u.role === 'admin',
     subscribedTo: [],
     notifications: [],
   }
+}
+
+function parseApiErrorDetail(detail: unknown, fallback: string): string {
+  if (typeof detail === 'string' && detail.trim()) return detail
+  if (Array.isArray(detail) && detail.length > 0) {
+    const first = detail[0]
+    if (typeof first === 'string' && first.trim()) return first
+    if (first && typeof first === 'object' && 'msg' in first) {
+      const msg = (first as { msg?: unknown }).msg
+      if (typeof msg === 'string' && msg.trim()) return msg
+    }
+  }
+  if (detail && typeof detail === 'object' && 'msg' in detail) {
+    const msg = (detail as { msg?: unknown }).msg
+    if (typeof msg === 'string' && msg.trim()) return msg
+  }
+  return fallback
 }
 
 // Wrappers around the browser's localStorage API
@@ -32,6 +82,74 @@ function saveToken(token: string) {
 
 function getToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY)
+}
+
+/** Sync stored UI theme to the document (backend values: dark | light, default dark). */
+export function applyDocumentUiTheme(theme: string) {
+  if (typeof document === 'undefined') return
+  const normalized = theme === 'light' ? 'light' : 'dark'
+  document.documentElement.dataset.uiTheme = normalized
+}
+
+async function fetchUserPreferences(tokenOverride?: string | null): Promise<UserPreferencesDTO | null> {
+  const token = tokenOverride ?? getToken()
+  if (!token) return null
+
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/user/preferences`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (response.status === 401) {
+      logout()
+      return null
+    }
+
+    if (!response.ok) return null
+
+    return (await response.json()) as UserPreferencesDTO
+  } catch {
+    return null
+  }
+}
+
+async function updateUserPreferences(patch: UserPreferencesPatch): Promise<PreferencesUpdateResult> {
+  const token = getToken()
+  if (!token) {
+    return { ok: false, message: 'No active session.' }
+  }
+
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/user/preferences/update`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(patch),
+    })
+
+    if (response.status === 401) {
+      logout()
+      return { ok: false, message: 'Session expired. Sign in again.' }
+    }
+
+    if (!response.ok) {
+      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      return {
+        ok: false,
+        message: err?.detail ?? 'Preferences update failed.',
+      }
+    }
+
+    const preferences = (await response.json()) as UserPreferencesDTO
+    applyDocumentUiTheme(preferences.ui_theme)
+    return { ok: true, preferences }
+  } catch {
+    return { ok: false, message: 'Unable to reach auth service.' }
+  }
 }
 
 function saveCurrentUser(user: User | null) {
@@ -67,6 +185,10 @@ async function fetchProfile(token: string): Promise<User | null> {
   const backendUser = (await response.json()) as BackendUser
   const mapped = mapBackendUser(backendUser)
   saveCurrentUser(mapped)
+
+  const prefs = await fetchUserPreferences(token)
+  if (prefs) applyDocumentUiTheme(prefs.ui_theme)
+
   return mapped
 }
 
@@ -136,10 +258,10 @@ async function register(payload: RegisterPayload): Promise<AuthResult> {
     })
 
     if (!response.ok) {
-      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      const err = (await response.json().catch(() => null)) as { detail?: unknown } | null
       return {
         ok: false,
-        message: err?.detail ?? 'Registration failed.',
+        message: parseApiErrorDetail(err?.detail, 'Registration failed.'),
         user: null,
       }
     }
@@ -168,14 +290,52 @@ async function hydrateCurrentUser(): Promise<User | null> {
   return user
 }
 
+export type FetchPublicProfileResult =
+  | { ok: true; user: User }
+  | { ok: false; status: number; message: string }
+
+async function fetchPublicProfile(userId: number): Promise<FetchPublicProfileResult> {
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/user/public/${userId}`)
+
+    if (response.status === 404) {
+      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      return {
+        ok: false,
+        status: 404,
+        message: err?.detail ?? 'User not found.',
+      }
+    }
+
+    if (response.status === 401) {
+      return { ok: false, status: 401, message: 'Session expired or invalid. Sign in again.' }
+    }
+
+    if (!response.ok) {
+      return { ok: false, status: response.status, message: 'Failed to load profile.' }
+    }
+
+    const backendUser = (await response.json()) as BackendUser
+    return { ok: true, user: mapBackendUser(backendUser) }
+  } catch {
+    return { ok: false, status: 0, message: 'Unable to reach auth service.' }
+  }
+}
+
 // Keep compatibility with existing UI code that calls getAllUsers()
-function getAllUsers(): User[] {
-  const current = getCurrentUser()
-  return current ? [current] : []
+async function getAllUsers(): Promise<User[]> {
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/users/public/`)
+    if (!response.ok) return []
+    const backendUsers = (await response.json()) as BackendUser[]
+    return backendUsers.map(mapBackendUser)
+  } catch {
+    return []
+  }
 }
 
 // Keep local profile update for now (backend endpoint currently expects full UserCreate)
-function updateCurrentUser(update: Pick<User, 'username' | 'bio'>): AuthResult {
+async function updateCurrentUser(update: Pick<User, 'username' | 'bio'>): Promise<AuthResult> {
   const current = getCurrentUser()
   if (!current) {
     return {
@@ -185,17 +345,109 @@ function updateCurrentUser(update: Pick<User, 'username' | 'bio'>): AuthResult {
     }
   }
 
-  const next: User = {
-    ...current,
-    username: update.username.trim(),
-    bio: update.bio.trim(),
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/user/profile/edit`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: update.username.trim(),
+        bio: update.bio.trim(),
+      }),
+    })
+    if (response.status === 401) {
+      logout()
+      return { ok: false, message: 'Session expired. Sign in again.', user: null }
+    }
+    if (!response.ok) {
+      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      return {
+        ok: false,
+        message: err?.detail ?? 'Profile update failed.',
+        user: null,
+      }
+    }
+    const backendUser = (await response.json()) as BackendUser
+    const mapped = mapBackendUser(backendUser)
+    const next: User = {
+      ...current,
+      id: mapped.id,
+      username: mapped.username,
+      email: mapped.email,
+      isAdmin: mapped.isAdmin,
+      bio: update.bio.trim(),
+      avatar: mapped.avatar,
+    }
+    saveCurrentUser(next)
+    return { ok: true, message: 'Profile saved.', user: next }
+  } catch {
+    return { ok: false, message: 'Unable to reach auth service.', user: null }
+  }
+}
+
+async function uploadAvatar(file: File): Promise<AuthResult> {
+  const token = getToken()
+  if (!token) {
+    return { ok: false, message: 'No active session.', user: null }
   }
 
-  saveCurrentUser(next)
-  return {
-    ok: true,
-    message: 'Profile updated locally.',
-    user: next,
+  const current = getCurrentUser()
+  if (!current) {
+    return { ok: false, message: 'No active user session.', user: null }
+  }
+
+  const formData = new FormData()
+  formData.append('file', file)
+
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/user/profile/avatar`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    })
+
+    if (response.status === 401) {
+      logout()
+      return { ok: false, message: 'Session expired. Sign in again.', user: null }
+    }
+
+    if (response.status === 400) {
+      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      return {
+        ok: false,
+        message: err?.detail ?? 'Invalid image. Use JPEG, PNG, or WebP under 5MB.',
+        user: null,
+      }
+    }
+
+    if (!response.ok) {
+      const err = (await response.json().catch(() => null)) as { detail?: string } | null
+      return {
+        ok: false,
+        message: err?.detail ?? 'Avatar upload failed.',
+        user: null,
+      }
+    }
+
+    const backendUser = (await response.json()) as BackendUser
+    const mapped = mapBackendUser(backendUser)
+    const next: User = {
+      ...current,
+      id: mapped.id,
+      username: mapped.username,
+      email: mapped.email,
+      bio: mapped.bio,
+      isAdmin: mapped.isAdmin,
+      avatar: mapped.avatar,
+    }
+    saveCurrentUser(next)
+    return { ok: true, message: 'Profile photo updated.', user: next }
+  } catch {
+    return { ok: false, message: 'Unable to reach auth service.', user: null }
   }
 }
 
@@ -211,7 +463,12 @@ export const authService = {
   register,
   hydrateCurrentUser,
   getCurrentUser,
+  getToken,
   getAllUsers,
+  fetchPublicProfile,
   updateCurrentUser,
+  uploadAvatar,
+  fetchUserPreferences,
+  updateUserPreferences,
   logout,
 }

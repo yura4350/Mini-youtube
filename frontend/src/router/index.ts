@@ -29,9 +29,21 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/users/:userId',
+      name: 'user-profile',
+      component: () => import('../views/PublicProfileView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/notifications',
       name: 'notifications',
       component: () => import('../views/NotificationsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/history',
+      name: 'watch-history',
+      component: () => import('../views/WatchHistoryView.vue'),
       meta: { requiresAuth: true },
     },
     {
@@ -74,7 +86,7 @@ router.beforeEach((to) => {
   }
 
   if (to.meta.guestOnly && loggedIn) {
-    return { name: 'profile' }
+    return { name: 'home' }
   }
 
   return true

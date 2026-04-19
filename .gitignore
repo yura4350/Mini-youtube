@@ -225,7 +225,9 @@ postgres_data/
 # video upload artifacts
 src/video_crud_service/uploads/
 src/video_crud_service/uploads/thumbnails/
+src/user_prefs_and_accounts_service/avatars/
 
 
 #Vue
 frontend/.pnpm-store
+data/

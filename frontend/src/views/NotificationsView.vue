@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AppIcon from '@/components/icons/AppIcon.vue'
@@ -36,12 +36,12 @@ async function loadNotifications() {
     errorMessage.value = error instanceof Error ? error.message : 'Failed to load notifications.'
   } finally {
     loading.value = false
-    notifyBadgeRefresh()
   }
 }
 
 function formatType(type: NotificationItem['type']): string {
   if (type === 'new_video') return 'New video'
+  if (type === 'direct_message') return 'Direct message'
   return 'Subscription'
 }
 
@@ -105,6 +105,11 @@ async function markAllAsRead() {
 
 onMounted(() => {
   loadNotifications()
+  window.addEventListener('notifications-updated', loadNotifications)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('notifications-updated', loadNotifications)
 })
 </script>
 
@@ -179,9 +184,9 @@ onMounted(() => {
 }
 
 .inbox-shell {
-  border: 1px solid rgba(255, 255, 255, 0.13);
+  border: 1px solid var(--border-default);
   border-radius: 16px;
-  background: #171717;
+  background: var(--bg-6);
   padding: 14px;
 }
 
@@ -194,7 +199,7 @@ onMounted(() => {
 }
 
 .inbox-header h1 {
-  color: #fff;
+  color: var(--text-main);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -202,7 +207,7 @@ onMounted(() => {
 }
 
 .inbox-header p {
-  color: #aeb4c0;
+  color: var(--text-muted);
   margin-top: 4px;
 }
 
@@ -219,8 +224,8 @@ button {
   border: none;
   border-radius: 9px;
   padding: 8px 11px;
-  color: #fff;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
   cursor: pointer;
 }
 
@@ -230,19 +235,19 @@ button:disabled {
 }
 
 button.ghost {
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid var(--border-heavy);
   background: transparent;
 }
 
 button.ghost.active {
-  border-color: rgba(239, 68, 68, 0.75);
-  background: rgba(220, 38, 38, 0.18);
+  border-color: var(--accent-outline-soft);
+  background: var(--accent-wash-hover);
 }
 
 .status-box {
-  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border: 1px dashed var(--border-strong);
   border-radius: 12px;
-  color: #d5dae3;
+  color: var(--text-subtle);
   padding: 14px;
   display: flex;
   align-items: center;
@@ -259,9 +264,9 @@ button.ghost.active {
 }
 
 .notification-item {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-default);
   border-radius: 12px;
-  background: #1f1f1f;
+  background: var(--bg-7);
   padding: 12px;
   display: flex;
   align-items: flex-start;
@@ -272,36 +277,36 @@ button.ghost.active {
 }
 
 .notification-item:hover {
-  border-color: rgba(239, 68, 68, 0.4);
+  border-color: var(--accent-outline);
   transform: translateY(-1px);
 }
 
 .notification-item.unread {
-  border-color: rgba(239, 68, 68, 0.5);
+  border-color: var(--accent-outline);
   box-shadow: inset 3px 0 0 rgba(220, 38, 38, 0.95);
 }
 
 .item-main h2 {
-  color: #fff;
+  color: var(--text-main);
   font-size: 17px;
   line-height: 1.35;
 }
 
 .item-type {
-  color: #fda4af;
+  color: var(--accent-text-soft);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
 
 .item-message {
-  color: #c7ccd6;
+  color: var(--text-soft);
   margin-top: 4px;
 }
 
 .item-main small {
   margin-top: 7px;
-  color: #9ca3af;
+  color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -318,14 +323,14 @@ button.ghost.active {
   border-radius: 999px;
   padding: 3px 8px;
   font-size: 12px;
-  border: 1px solid rgba(239, 68, 68, 0.65);
-  color: #ffe4e6;
-  background: rgba(220, 38, 38, 0.2);
+  border: 1px solid var(--accent-outline);
+  color: var(--text-body);
+  background: var(--accent-wash-hover);
 }
 
 .pill.read {
-  border-color: rgba(255, 255, 255, 0.25);
-  color: #d1d5db;
+  border-color: var(--border-heavy);
+  color: var(--text-body);
   background: rgba(255, 255, 255, 0.05);
 }
 

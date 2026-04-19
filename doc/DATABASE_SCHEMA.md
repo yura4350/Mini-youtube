@@ -40,10 +40,10 @@
 ## Subscriptions & Preferences
 
 ### `subscriptions`
-- `subscriber_user_id` (FK -> users.id)
-- `channel_user_id` (FK -> users.id)
+- `subscriber_user_id` (PK, FK -> users.id, indexed)
+- `channel_user_id` (PK, FK -> users.id)
 - `created_at`
-- unique constraint: (`subscriber_user_id`, `channel_user_id`)
+- primary key: (`subscriber_user_id`, `channel_user_id`)
 
 ### `user_settings`
 - `user_id` (PK, FK -> users.id)
@@ -98,11 +98,18 @@
 - unique constraint: (`user_id`, `video_id`)
 
 ### `watch_history`
-- `user_id` (FK -> users.id)
+- `id` (PK, auto-increment)
+- `user_id` (FK -> users.id, indexed)
 - `video_id` (FK -> videos.id)
-- `last_position_seconds`
+- `last_position_seconds` (default 0)
 - `last_watched_at`
 - unique constraint: (`user_id`, `video_id`)
+
+### `search_history`
+- `id` (PK, auto-increment)
+- `user_id` (FK -> users.id, indexed)
+- `query` (text, not null)
+- `searched_at`
 
 ### `video_engagement_daily` (optional analytics table)
 - `video_id`

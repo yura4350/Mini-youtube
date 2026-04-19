@@ -3,8 +3,11 @@ import { computed, onMounted, reactive, ref, watchEffect } from 'vue'
 import VideoCard from '@/components/VideoCard.vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
+import { authService, applyDocumentUiTheme } from '@/services/auth'
 import { fetchVideos } from '@/services/videos'
+import { fetchSubscriptionsFeed } from '@/services/dashboard'
 import type { VideoItem } from '@/types/video'
+import type { UserPreferencesDTO } from '@/types/auth'
 
 const authStore = useAuthStore()
 const tab = ref<'videos' | 'subscriptions'>('videos')
@@ -12,12 +15,62 @@ const editMode = ref(false)
 const message = ref('')
 const loadingVideos = ref(false)
 const videoError = ref('')
+const loadingSubscriptions = ref(false)
+const subscriptionsError = ref('')
 const allVideos = ref<VideoItem[]>([])
+const subscriptionVideos = ref<VideoItem[]>([])
 
 const form = reactive({
   username: '',
   bio: '',
 })
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const avatarUploading = ref(false)
+const avatarCacheBust = ref(0)
+
+const prefsLoading = ref(false)
+const prefsSavingPrivacy = ref(false)
+const prefsSavingNotifications = ref(false)
+const prefsSavingUi = ref(false)
+const prefsMessage = ref('')
+
+const prefs = reactive({
+  privacy: 'public' as 'public' | 'private',
+  notifications: true,
+  ui_theme: 'dark' as 'dark' | 'light',
+})
+
+function avatarDisplayUrl(): string {
+  const u = authStore.currentUser?.avatar
+  if (!u) return ''
+  const sep = u.includes('?') ? '&' : '?'
+  return avatarCacheBust.value ? `${u}${sep}t=${avatarCacheBust.value}` : u
+}
+
+function openAvatarPicker() {
+  fileInputRef.value?.click()
+}
+
+async function onAvatarFileChange(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+
+  avatarUploading.value = true
+  message.value = ''
+  const result = await authStore.uploadProfileAvatar(file)
+  avatarUploading.value = false
+
+  if (!result.ok) {
+    message.value = result.message
+    return
+  }
+
+  avatarCacheBust.value = Date.now()
+  message.value = result.message
+}
 
 watchEffect(() => {
   if (!authStore.currentUser) return
@@ -28,11 +81,6 @@ watchEffect(() => {
 const userVideos = computed(() => {
   if (!authStore.currentUser) return []
   return allVideos.value.filter((video) => video.authorId === authStore.currentUser?.id)
-})
-
-const subscribedVideos = computed(() => {
-  if (!authStore.currentUser) return []
-  return allVideos.value.filter((video) => authStore.currentUser?.subscribedTo.includes(video.authorId))
 })
 
 async function loadVideos() {
@@ -48,9 +96,24 @@ async function loadVideos() {
   }
 }
 
-function saveProfile() {
+async function loadSubscriptionsFeed() {
+  if (!authStore.currentUser) return
+
+  loadingSubscriptions.value = true
+  subscriptionsError.value = ''
+
+  try {
+    subscriptionVideos.value = await fetchSubscriptionsFeed(authStore.currentUser.id, 20)
+  } catch (error) {
+    subscriptionsError.value = error instanceof Error ? error.message : 'Failed to load subscriptions feed.'
+  } finally {
+    loadingSubscriptions.value = false
+  }
+}
+
+async function saveProfile() {
   message.value = ''
-  const result = authStore.updateProfile({ username: form.username, bio: form.bio })
+  const result = await authStore.updateProfile({ username: form.username, bio: form.bio })
   if (!result.ok) {
     message.value = result.message
     return
@@ -60,15 +123,93 @@ function saveProfile() {
   message.value = result.message
 }
 
+function applyPrefsFromServer(p: UserPreferencesDTO) {
+  prefs.privacy = p.privacy === 'private' ? 'private' : 'public'
+  prefs.notifications = p.notifications
+  prefs.ui_theme = p.ui_theme === 'light' ? 'light' : 'dark'
+  applyDocumentUiTheme(prefs.ui_theme)
+}
+
+async function loadPreferences() {
+  prefsLoading.value = true
+  prefsMessage.value = ''
+  const p = await authService.fetchUserPreferences()
+  prefsLoading.value = false
+  if (!p) {
+    prefsMessage.value = 'Could not load preferences.'
+    return
+  }
+  applyPrefsFromServer(p)
+}
+
+async function savePrivacySettings() {
+  prefsSavingPrivacy.value = true
+  prefsMessage.value = ''
+  const result = await authService.updateUserPreferences({ privacy: prefs.privacy })
+  prefsSavingPrivacy.value = false
+  if (!result.ok) {
+    prefsMessage.value = result.message
+    return
+  }
+  applyPrefsFromServer(result.preferences)
+  prefsMessage.value = 'Privacy settings saved.'
+}
+
+async function saveNotificationSettings() {
+  prefsSavingNotifications.value = true
+  prefsMessage.value = ''
+  const result = await authService.updateUserPreferences({ notifications: prefs.notifications })
+  prefsSavingNotifications.value = false
+  if (!result.ok) {
+    prefsMessage.value = result.message
+    return
+  }
+  applyPrefsFromServer(result.preferences)
+  prefsMessage.value = 'Notification preferences saved.'
+}
+
+async function saveUiSettings() {
+  prefsSavingUi.value = true
+  prefsMessage.value = ''
+  const result = await authService.updateUserPreferences({ ui_theme: prefs.ui_theme })
+  prefsSavingUi.value = false
+  if (!result.ok) {
+    prefsMessage.value = result.message
+    return
+  }
+  applyPrefsFromServer(result.preferences)
+  prefsMessage.value = 'Appearance saved.'
+}
+
 onMounted(() => {
   loadVideos()
+  loadSubscriptionsFeed()
+  loadPreferences()
 })
 </script>
 
 <template>
   <main v-if="authStore.currentUser" class="profile-page">
     <section class="profile-header">
-      <img :src="authStore.currentUser.avatar" :alt="authStore.currentUser.username" class="avatar" />
+      <div class="avatar-wrap">
+        <img :src="avatarDisplayUrl()" :alt="authStore.currentUser.username" class="avatar" />
+        <input
+          ref="fileInputRef"
+          type="file"
+          class="sr-only"
+          accept="image/jpeg,image/png,image/webp"
+          @change="onAvatarFileChange"
+        />
+        <button
+          type="button"
+          class="avatar-upload ghost"
+          :disabled="avatarUploading"
+          @click="openAvatarPicker"
+        >
+          <AppIcon name="user" :size="14" />
+          {{ avatarUploading ? 'Uploading…' : 'Change photo' }}
+        </button>
+      </div>
 
       <div class="header-main">
         <h1>{{ authStore.currentUser.username }}</h1>
@@ -81,7 +222,10 @@ onMounted(() => {
             ><AppIcon name="users" :size="14" />
             {{ authStore.currentUser.subscribedTo.length }} subscriptions</span
           >
-          <span><AppIcon name="bell" :size="14" /> Notification inbox enabled</span>
+          <span
+            ><AppIcon name="bell" :size="14" />
+            {{ prefs.notifications ? 'Push-style alerts enabled' : 'Notifications muted in preferences' }}</span
+          >
         </div>
       </div>
     </section>
@@ -112,6 +256,75 @@ onMounted(() => {
       </div>
     </section>
 
+    <section class="preferences">
+      <header>
+        <h2>Privacy</h2>
+        <p class="prefs-hint">Control whether your profile is visible to other signed-in users.</p>
+      </header>
+
+      <p v-if="prefsLoading" class="muted">Loading preferences…</p>
+      <div v-else class="prefs-grid">
+        <label class="prefs-field">
+          Profile visibility
+          <select v-model="prefs.privacy" class="prefs-select">
+            <option value="public">Public — others can open your profile</option>
+            <option value="private">Private — others see “User not found”</option>
+          </select>
+        </label>
+        <div class="prefs-actions">
+          <button type="button" :disabled="prefsSavingPrivacy" @click="savePrivacySettings">
+            <AppIcon name="check" :size="14" />
+            {{ prefsSavingPrivacy ? 'Saving…' : 'Save privacy' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="preferences">
+      <header>
+        <h2>Notifications</h2>
+        <p class="prefs-hint">Stored on your account; product notifications may still respect this flag as services adopt it.</p>
+      </header>
+
+      <p v-if="prefsLoading" class="muted">Loading preferences…</p>
+      <div v-else class="prefs-grid prefs-notifications">
+        <label class="toggle-row">
+          <input v-model="prefs.notifications" type="checkbox" class="prefs-checkbox" />
+          <span>Enable Notification Preferences</span>
+        </label>
+        <div class="prefs-actions">
+          <button type="button" :disabled="prefsSavingNotifications" @click="saveNotificationSettings">
+            <AppIcon name="bell" :size="14" />
+            {{ prefsSavingNotifications ? 'Saving…' : 'Save notifications' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="preferences">
+      <header>
+        <h2>Appearance</h2>
+        <p class="prefs-hint">Choose light or dark UI. This applies across the app after you save.</p>
+      </header>
+
+      <p v-if="prefsLoading" class="muted">Loading preferences…</p>
+      <div v-else class="prefs-grid">
+        <label class="prefs-field">
+          Theme
+          <select v-model="prefs.ui_theme" class="prefs-select">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
+        <div class="prefs-actions">
+          <button type="button" :disabled="prefsSavingUi" @click="saveUiSettings">
+            <AppIcon name="check" :size="14" />
+            {{ prefsSavingUi ? 'Saving…' : 'Save appearance' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
     <section class="tabs">
       <button :class="{ active: tab === 'videos' }" @click="tab = 'videos'">
         <AppIcon name="video" :size="14" /> My videos
@@ -132,13 +345,14 @@ onMounted(() => {
     </section>
 
     <section v-if="tab === 'subscriptions'" class="video-grid">
-      <p v-if="loadingVideos" class="muted">Loading videos...</p>
-      <p v-else-if="videoError" class="muted">{{ videoError }}</p>
-      <VideoCard v-for="video in subscribedVideos" :key="video.id" :video="video" />
-      <p v-if="!loadingVideos && !videoError && subscribedVideos.length === 0" class="muted">No subscriptions yet.</p>
+      <p v-if="loadingSubscriptions" class="muted">Loading subscriptions feed...</p>
+      <p v-else-if="subscriptionsError" class="muted">{{ subscriptionsError }}</p>
+      <VideoCard v-for="video in subscriptionVideos" :key="video.id" :video="video" />
+      <p v-if="!loadingSubscriptions && !subscriptionsError && subscriptionVideos.length === 0" class="muted">No videos from subscriptions yet.</p>
     </section>
 
     <p v-if="message" class="ok">{{ message }}</p>
+    <p v-if="prefsMessage" class="ok prefs-toast">{{ prefsMessage }}</p>
   </main>
 </template>
 
@@ -151,10 +365,11 @@ onMounted(() => {
 
 .profile-header,
 .editor,
+.preferences,
 .notification-item {
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #1a1a1a;
+  border: 1px solid var(--border-default);
+  background: var(--bg-1);
 }
 
 .profile-header {
@@ -162,6 +377,30 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 110px 1fr;
   gap: 14px;
+}
+
+.avatar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.avatar-upload {
+  font-size: 12px;
+  padding: 6px 10px;
 }
 
 .avatar {
@@ -172,18 +411,18 @@ onMounted(() => {
 }
 
 h1 {
-  color: #fff;
+  color: var(--text-main);
   font-size: 28px;
 }
 
 .email,
 .bio {
-  color: #c2c8d2;
+  color: var(--text-soft);
 }
 
 .stats {
   margin-top: 8px;
-  color: #e8ebf2;
+  color: var(--text-body);
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
@@ -195,6 +434,72 @@ h1 {
   padding: 14px;
 }
 
+.preferences {
+  margin-top: 12px;
+  padding: 14px;
+}
+
+.preferences header {
+  margin-bottom: 10px;
+}
+
+.preferences h2 {
+  color: var(--text-main);
+  font-size: 18px;
+}
+
+.prefs-hint {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.prefs-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.prefs-field {
+  display: grid;
+  gap: 6px;
+  color: var(--text-body);
+  font-size: 14px;
+}
+
+.prefs-notifications .toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-body);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.prefs-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-soft);
+}
+
+.prefs-select {
+  max-width: 420px;
+  background: var(--bg-0);
+  border: 1px solid var(--border-strong);
+  color: var(--text-main);
+  border-radius: 9px;
+  padding: 9px 11px;
+}
+
+.prefs-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.prefs-toast {
+  margin-top: 8px;
+}
+
 .editor header {
   display: flex;
   justify-content: space-between;
@@ -202,7 +507,7 @@ h1 {
 }
 
 .editor h2 {
-  color: #fff;
+  color: var(--text-main);
   font-size: 18px;
 }
 
@@ -215,15 +520,15 @@ h1 {
 label {
   display: grid;
   gap: 6px;
-  color: #e9ebef;
+  color: var(--text-body);
   font-size: 14px;
 }
 
 input,
 textarea {
-  background: #0f0f0f;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: var(--bg-0);
+  border: 1px solid var(--border-strong);
+  color: var(--text-main);
   border-radius: 9px;
   padding: 9px 11px;
 }
@@ -240,13 +545,14 @@ button {
   border: none;
   border-radius: 9px;
   padding: 8px 12px;
-  color: #fff;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
 }
 
 button.ghost {
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid var(--border-heavy);
   background: transparent;
+  color: var(--text-main);
 }
 
 .tabs {
@@ -257,15 +563,15 @@ button.ghost {
 }
 
 .tabs button {
-  background: #161616;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #dadde5;
+  background: var(--bg-5);
+  border: 1px solid var(--border-medium);
+  color: var(--text-subtle);
 }
 
 .tabs button.active {
-  background: rgba(220, 38, 38, 0.2);
-  border-color: rgba(239, 68, 68, 0.75);
-  color: #fff;
+  background: var(--accent-wash-hover);
+  border-color: var(--accent-outline-soft);
+  color: var(--text-main);
 }
 
 .inbox-link {
@@ -273,17 +579,17 @@ button.ghost {
   align-items: center;
   gap: 6px;
   text-decoration: none;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--border-medium);
   border-radius: 9px;
-  color: #e5e7eb;
+  color: var(--text-body);
   padding: 8px 12px;
-  background: #161616;
+  background: var(--bg-5);
 }
 
 .inbox-link:hover {
-  border-color: rgba(239, 68, 68, 0.75);
-  background: rgba(220, 38, 38, 0.16);
-  color: #fff;
+  border-color: var(--accent-outline-soft);
+  background: var(--accent-wash);
+  color: var(--text-main);
 }
 
 .video-grid {
@@ -294,12 +600,12 @@ button.ghost {
 }
 
 .muted {
-  color: #a7adba;
+  color: var(--text-muted);
 }
 
 .ok {
   margin-top: 10px;
-  color: #a7f3be;
+  color: var(--ok-text);
 }
 
 @media (max-width: 760px) {

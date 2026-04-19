@@ -51,6 +51,7 @@ Python, FastAPI, PostgreSQL, pytest, Vue.js (TypeScript), Docker, docker-compose
 Can:
 - Write and update pytest tests for existing endpoints
 - Generate dummy seed data for the database
+- Write frontend-related code
 - Review code for quality, readability, and adherence to conventions
 - Suggest improvements based on the existing plan
 - Write docstrings and inline comments

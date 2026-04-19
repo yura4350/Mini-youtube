@@ -26,8 +26,16 @@ export const useAuthStore = defineStore('auth', () => {
     return result
   }
 
-  function updateProfile(update: Pick<User, 'username' | 'bio'>) {
-    const result = authService.updateCurrentUser(update)
+  async function updateProfile(update: Pick<User, 'username' | 'bio'>) {
+    const result = await authService.updateCurrentUser(update)
+    if (result.ok) {
+      currentUser.value = result.user
+    }
+    return result
+  }
+
+  async function uploadProfileAvatar(file: File) {
+    const result = await authService.uploadAvatar(file)
     if (result.ok) {
       currentUser.value = result.user
     }
@@ -46,6 +54,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     register,
     updateProfile,
+    uploadProfileAvatar,
     logout,
   }
 })
