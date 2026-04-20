@@ -17,11 +17,16 @@ import os
 import re
 from dotenv import load_dotenv
 
+from fastapi import BackgroundTasks
+import smtplib
+from email.message import EmailMessage
+
 load_dotenv() # Load the variables from .env file
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 TOKEN_EXPIRES = 30
+RESET_TOKEN_EXPIRES = 15
 
 # password hashing (bcrypt)
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated="auto")
@@ -239,6 +244,31 @@ def create_access_token(data:dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
     return encoded_jwt
+
+# create dictionary to hold reset tokens
+def create_password_reset_token(email: str):
+    expire = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXPIRES)
+    to_encode = {"sub": email, "exp": expire, "type": "reset"}
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_password_reset_token(token: str) -> Optional[str]:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "reset":
+            return None
+        return payload.get("sub")
+    except jwt.PyJWTError:
+        return None
+
+# Send the dummy reset email
+def send_reset_email(recipient_email: str, token: str):
+    # The frontend URL where the user will type their new password
+    reset_link = f"http://localhost:5173/sreset-password?token={token}"
+    
+    # For local testing, just print to the console
+    print(f"Dummy email sent to {recipient_email}")
+    print(f"Subject: Password Reset Request")
+    print(f"Body: Click the link to reset your password: {reset_link}")
 
 def verify_token(token:str) -> TokenData:
     try:
