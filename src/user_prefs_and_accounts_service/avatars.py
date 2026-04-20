@@ -1,5 +1,4 @@
 import os
-import time
 from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
@@ -40,7 +39,7 @@ async def upload_avatar(
             detail="Unsupported file type",
         )
     
-    saved_name = f"{current_user.id}_{int(time.time())}{suffix}"
+    saved_name = f"{current_user.id}{suffix}"
     user_dir = AVATAR_DIR / str(current_user.id)
     user_dir.mkdir(parents=True, exist_ok=True)
 
