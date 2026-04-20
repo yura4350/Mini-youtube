@@ -1,5 +1,7 @@
 import os
 
+import random
+
 from locust import HttpUser, task, between
 
 WAIT = between(0.5, 2.0)
@@ -49,14 +51,6 @@ class AuthServiceUser(HttpUser):
     def health(self):
         self.client.get("/health")
 
-class DashboardServiceUser(HttpUser):
-    host = "http://localhost:8004"
-    wait_time = between(1, 3)
-
-    @task
-    def test_health(self):
-        self.client.get("/health")
-
 class VideoServiceUser(HttpUser):
     host = "http://localhost:8000"
     wait_time = WAIT
@@ -99,26 +93,89 @@ class VideoServiceUser(HttpUser):
             return
         self.client.post(f"/videos/{self.video_id}/view")
 
+class DashboardServiceUser(HttpUser):
+    host = "http://localhost:8004"
+    wait_time = between(1, 3)
+
+    def on_start(self):
+        self.user_ids = ["1", "2", "3"]
+        self.search_terms = ["python", "ai", "tutorial"]
+
+    @task(5)
+    def health(self):
+        self.client.get("/health")
+
+    @task(4)
+    def search(self):
+        self.client.get(
+            "/search",
+            params={
+                "q": random.choice(self.search_terms),
+                "user_id": random.choice(self.user_ids),
+            },
+        )
+
+    @task(3)
+    def recommend(self):
+        self.client.get("/dashboard/recommend", params={"user_id": random.choice(self.user_ids)})
+
+
 class CommunicationServiceUser(HttpUser):
     host = "http://localhost:8002"
     wait_time = between(1, 3)
 
-    @task
-    def test_health(self):
+    def on_start(self):
+        self.user_ids = ["1", "2", "3"]
+
+    @task(5)
+    def health(self):
         self.client.get("/health")
+
+    @task(4)
+    def create_notification(self):
+        self.client.post(
+            "/comm/notifications",
+            json={
+                "type": "new_video",
+                "recipient_user_ids": [random.choice(self.user_ids)],
+                "title": "Load test",
+                "message": "New video notification",
+                "actor_user_id": "10",
+                "channel_id": "10",
+                "video_id": "v-1",
+            },
+        )
+
+    @task(3)
+    def list_notifications(self):
+        self.client.get("/comm/notifications", params={"user_id": random.choice(self.user_ids)})
+
 
 class IntelligenceServiceUser(HttpUser):
     host = "http://localhost:8005"
     wait_time = between(1, 3)
 
-    @task
-    def test_health(self):
+    @task(5)
+    def health(self):
         self.client.get("/health")
+
+    @task(4)
+    def summarize(self):
+        self.client.post(
+            "/ai/summarize",
+            json={
+                "video_id": "v-1",
+                "source_text": "This video explains FastAPI basics and API testing.",
+                "source_kind": "subtitle_text",
+                "max_sentences": 3,
+            },
+        )
+
 
 class AdminServiceUser(HttpUser):
     host = "http://localhost:8001"
     wait_time = between(1, 3)
 
-    @task
-    def test_health(self):
+    @task(5)
+    def health(self):
         self.client.get("/health")
