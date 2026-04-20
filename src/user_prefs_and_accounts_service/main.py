@@ -500,6 +500,29 @@ def forgot_password(request: PasswordResetRequest, background_tasks: BackgroundT
     
     return {"message": "If that email is in our system, a reset link has been sent."}
 
+@app.post("/auth/reset-password")
+def reset_password(request: PasswordResetConfirm, db: Session = Depends(get_db)):
+    email = verify_password_reset_token(request.token)
+    
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+        
+    user = db.query(User).filter(User.email == email).first()
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+        
+    # Hash the new password and save it
+    user.hashed_pwd = get_pwd_hash(request.new_password)
+    db.commit()
+    
+    return {"message": "Password has been reset successfully"}
+
 ### USER PREFERENCES TABLE RELATED ENDPOINTS ###
 # Get user's own preferences
 @app.get("/user/preferences", response_model=UserPreferencesResponse)
