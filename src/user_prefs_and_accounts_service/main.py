@@ -488,6 +488,18 @@ def get_public_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+### RESET PASSWORD ENDPOINTS ###
+@app.post("/auth/forgot-password")
+def forgot_password(request: PasswordResetRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == request.email).first()
+
+    # Process if user exists and active. Send the same message regardless of the outcome
+    if user and user.is_active:
+        token = create_password_reset_token(user.email)
+        background_tasks.add_task(send_reset_email, user.email, token)
+    
+    return {"message": "If that email is in our system, a reset link has been sent."}
+
 ### USER PREFERENCES TABLE RELATED ENDPOINTS ###
 # Get user's own preferences
 @app.get("/user/preferences", response_model=UserPreferencesResponse)
