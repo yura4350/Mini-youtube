@@ -152,6 +152,28 @@ Data files needed: Database is auto-initialized by PostgreSQL container
 
 Known Bugs:
 
+### Testing the program
+
+#### Concurrency and Load Testing (on the `vcm-52527.vm.duke.edu`)
+
+- Admin Dashboard (only /health endpoint) - no need for large throughput
+  - 250 concurrent users+
+
+- Video Service
+  - 100+, 500 concurrent shut down the service
+
+- Auth Service
+  - 70+, some errors at 100+ concurrent users
+
+- Intelligence Service
+  - 500+ concurrent users
+
+- Communication Service
+  - 500+ concurrent users
+
+- Dashboard Service
+  - 500+ concurrent users
+
 
 ### Notes/Assumptions
 
