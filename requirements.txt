@@ -12,3 +12,4 @@ PyJWT
 python-dotenv
 openai>=1.100.0,<2
 locust
+fastapi-mail

@@ -503,7 +503,7 @@ def forgot_password(request: PasswordResetRequest, background_tasks: BackgroundT
 @app.post("/auth/reset-password")
 def reset_password(request: PasswordResetConfirm, db: Session = Depends(get_db)):
     email = verify_password_reset_token(request.token)
-    
+        
     if not email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
