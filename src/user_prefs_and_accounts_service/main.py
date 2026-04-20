@@ -170,6 +170,19 @@ class UserPreferencesUpdate(BaseModel):
     notifications: Optional[bool] = None
     ui_theme: Optional[str] = None
 
+# Pydantic Models for Password Reset
+class PasswordResetRequest(BaseModel):
+    email: str
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_password_strength(value)
+
 # Function to return user preferences (or create them with default valuesif they don't exist)
 def _get_or_create_user_preferences(db: Session, user_id: int) -> UserPreferences:
     user_prefs = db.query(UserPreferences).filter(UserPreferences.user_id == user_id).first()
