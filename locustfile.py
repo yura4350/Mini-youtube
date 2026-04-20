@@ -49,7 +49,7 @@ class AuthServiceUser(HttpUser):
 
     @task(1)
     def health(self):
-        self.client.get("/health")
+        self.client.get("/health", name="Auth API /health")
 
 class VideoServiceUser(HttpUser):
     host = "http://localhost:8000"
@@ -70,10 +70,6 @@ class VideoServiceUser(HttpUser):
     @task(2)
     def ping(self):
         self.client.get("/videos/ping")
-
-    @task(3)
-    def health(self):
-        self.client.get("/health")
 
     @task(2)
     def video_detail(self):
@@ -103,7 +99,7 @@ class DashboardServiceUser(HttpUser):
 
     @task(5)
     def health(self):
-        self.client.get("/health")
+        self.client.get("/health", name="Dashboard API /health")
 
     @task(4)
     def search(self):
@@ -129,7 +125,7 @@ class CommunicationServiceUser(HttpUser):
 
     @task(5)
     def health(self):
-        self.client.get("/health")
+        self.client.get("/health", name="Communication API /health")
 
     @task(4)
     def create_notification(self):
@@ -157,7 +153,7 @@ class IntelligenceServiceUser(HttpUser):
 
     @task(5)
     def health(self):
-        self.client.get("/health")
+        self.client.get("/health", name="Intelligence API /health")
 
     @task(4)
     def summarize(self):
@@ -178,4 +174,4 @@ class AdminServiceUser(HttpUser):
 
     @task(5)
     def health(self):
-        self.client.get("/health")
+        self.client.get("/health", name="Admin API /health")
