@@ -276,15 +276,32 @@ def verify_password_reset_token(token: str) -> Optional[str]:
     except jwt.PyJWTError:
         return None
 
-# Send the dummy reset email
-def send_reset_email(recipient_email: str, token: str):
-    # The frontend URL where the user will type their new password
-    reset_link = f"http://localhost:5173/sreset-password?token={token}"
+# Send reset email
+async def send_reset_email(recipient_email: str, token: str):
+    reset_link = f"http://localhost:5173/reset-password?token={token}"
     
-    # For local testing, just print to the console
-    print(f"Dummy email sent to {recipient_email}")
-    print(f"Subject: Password Reset Request")
-    print(f"Body: Click the link to reset your password: {reset_link}")
+    html_content = f"""
+    <html>
+        <body>
+            <h2>Password Reset Request</h2>
+            <p>You requested a password reset. Click the link below to set a new password:</p>
+            <p><a href="{reset_link}">Reset My Password</a></p>
+            <p>If you did not request this, please ignore this email.</p>
+        </body>
+    </html>
+    """
+
+    # Define the message package
+    message = MessageSchema(
+        subject="Reset Your Password",
+        recipients=[recipient_email], 
+        body=html_content,
+        subtype=MessageType.html
+    )
+
+    # Initialize FastMail and send
+    fm = FastMail(conf)
+    await fm.send_message(message)
 
 def verify_token(token:str) -> TokenData:
     try:
@@ -506,7 +523,7 @@ def get_public_user(user_id: int, db: Session = Depends(get_db)):
 
 ### RESET PASSWORD ENDPOINTS ###
 @app.post("/auth/forgot-password")
-def forgot_password(request: PasswordResetRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def forgot_password(request: PasswordResetRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == request.email).first()
 
     # Process if user exists and active. Send the same message regardless of the outcome
