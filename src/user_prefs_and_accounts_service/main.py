@@ -309,8 +309,13 @@ def health():
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == user.email).first():
         raise HTTPException(
-            status_code=404,
-            detail="User already created!"
+            status_code=400,
+            detail="An account with that email already exists."
+        )
+    if db.query(User).filter(User.name == user.name).first():
+        raise HTTPException(
+            status_code=400,
+            detail="That username is already taken."
         )
     
     hashed_password = get_pwd_hash(user.password)

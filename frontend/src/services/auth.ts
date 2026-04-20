@@ -25,8 +25,7 @@ const AUTH_API_BASE_URL = (
 const ACCESS_TOKEN_KEY = 'media_frontend_access_token'
 const CURRENT_USER_KEY = 'media_frontend_current_user'
 
-const DEFAULT_AVATAR_URL =
-  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
+const DEFAULT_AVATAR_URL = '/default-avatar.svg'
 
 const AVATAR_FILE_PREFIX = '/user/profile/avatar/file/'
 

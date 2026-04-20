@@ -1,10 +1,9 @@
 import os
+import time
 from pathlib import Path
-from uuid import uuid4
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-# Import from your package — adjust if you use relative imports inside the package
 from src.user_prefs_and_accounts_service.main import User, UserResponse, get_current_active_user, get_db
 
 router = APIRouter(tags=["avatars"])
@@ -41,14 +40,22 @@ async def upload_avatar(
             detail="Unsupported file type",
         )
     
-    saved_name = f"{current_user.id}{suffix}"
-    saved_path = AVATAR_DIR / str(current_user.id) / saved_name
-    saved_path.parent.mkdir(parents=True, exist_ok=True)
-    saved_path.write_bytes(content)
+    saved_name = f"{current_user.id}_{int(time.time())}{suffix}"
+    user_dir = AVATAR_DIR / str(current_user.id)
+    user_dir.mkdir(parents=True, exist_ok=True)
 
     db_user = db.query(User).filter(User.id == current_user.id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User does not exist")
+
+    # Delete previous avatar file so old uploads don't accumulate on disk
+    if db_user.avatar and str(db_user.avatar).startswith("/user/profile/avatar/file/"):
+        old_filename = str(db_user.avatar).split("/user/profile/avatar/file/")[-1]
+        old_path = user_dir / old_filename
+        old_path.unlink(missing_ok=True)
+
+    saved_path = user_dir / saved_name
+    saved_path.write_bytes(content)
 
     db_user.avatar = f"/user/profile/avatar/file/{saved_name}"
     db.commit()
