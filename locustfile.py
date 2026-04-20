@@ -14,7 +14,7 @@ USER_ID = os.environ.get("LOCUST_USER_ID", "1")
 # Simulate users hitting the AuthService API
 class AuthServiceUser(HttpUser):
     
-    host = "http://localhost:8003"
+    host = "http://vcm-52527.vm.duke.edu:8003"
 
     wait_time = WAIT
 
@@ -52,7 +52,7 @@ class AuthServiceUser(HttpUser):
         self.client.get("/health", name="Auth API /health")
 
 class VideoServiceUser(HttpUser):
-    host = "http://localhost:8000"
+    host = "http://vcm-52527.vm.duke.edu:8000"
     wait_time = WAIT
 
     def on_start(self):
@@ -101,7 +101,7 @@ class VideoServiceUser(HttpUser):
         self.client.post(f"/videos/{self.video_id}/view")
 
 class DashboardServiceUser(HttpUser):
-    host = "http://localhost:8004"
+    host = "http://vcm-52527.vm.duke.edu:8004"
     wait_time = between(1, 3)
 
     def on_start(self):
@@ -128,7 +128,7 @@ class DashboardServiceUser(HttpUser):
 
 
 class CommunicationServiceUser(HttpUser):
-    host = "http://localhost:8002"
+    host = "http://vcm-52527.vm.duke.edu:8002"
     wait_time = between(1, 3)
 
     def on_start(self):
@@ -159,7 +159,7 @@ class CommunicationServiceUser(HttpUser):
 
 
 class IntelligenceServiceUser(HttpUser):
-    host = "http://localhost:8005"
+    host = "http://vcm-52527.vm.duke.edu:8005"
     wait_time = between(1, 3)
 
     @task(5)
@@ -180,7 +180,7 @@ class IntelligenceServiceUser(HttpUser):
 
 
 class AdminServiceUser(HttpUser):
-    host = "http://localhost:8001"
+    host = "http://vcm-52527.vm.duke.edu:8001"
     wait_time = between(1, 3)
 
     @task(5)
