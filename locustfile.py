@@ -7,8 +7,7 @@ WAIT = between(0.5, 2.0)
 AUTH_EMAIL = os.environ.get("LOCUST_AUTH_EMAIL", "loadtest@example.com")
 AUTH_PASSWORD = os.environ.get("LOCUST_AUTH_PASSWORD", "Loadtest1")
 
-DASHBOARD_USER_ID = os.environ.get("LOCUST_USER_ID", "1")
-COMM_RECIPIENT_USER_ID = os.environ.get("LOCUST_COMM_USER_ID", "1")
+USER_ID = os.environ.get("LOCUST_USER_ID", "1")
 
 # Simulate users hitting the AuthService API
 class AuthServiceUser(HttpUser):
