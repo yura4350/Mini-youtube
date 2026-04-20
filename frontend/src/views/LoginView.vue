@@ -49,6 +49,7 @@ async function onSubmit() {
           Password
           <input v-model="form.password" type="password" placeholder="Enter your password" required />
         </label>
+        <RouterLink class="forgot-link" to="/reset-password">Forgot password?</RouterLink>
 
         <button type="submit" :disabled="loading">
           {{ loading ? 'Signing in...' : 'Sign In' }}
@@ -176,6 +177,17 @@ button:disabled {
 .switch-link a {
   margin-left: 6px;
   color: var(--accent-text-strong);
+}
+
+.forgot-link {
+  justify-self: end;
+  font-size: 13px;
+  color: var(--accent-text-strong);
+  text-decoration: none;
+}
+
+.forgot-link:hover {
+  text-decoration: underline;
 }
 
 .demo-box {
