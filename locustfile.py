@@ -1,12 +1,53 @@
+import os
+
 from locust import HttpUser, task, between
+
+WAIT = between(0.5, 2.0)
+
+AUTH_EMAIL = os.environ.get("LOCUST_AUTH_EMAIL", "loadtest@example.com")
+AUTH_PASSWORD = os.environ.get("LOCUST_AUTH_PASSWORD", "Loadtest1")
+
+DASHBOARD_USER_ID = os.environ.get("LOCUST_USER_ID", "1")
+COMM_RECIPIENT_USER_ID = os.environ.get("LOCUST_COMM_USER_ID", "1")
 
 # Simulate users hitting the AuthService API
 class AuthServiceUser(HttpUser):
+    
     host = "http://localhost:8003"
-    wait_time = between(1, 3)
 
-    @task
-    def test_health(self):
+    wait_time = WAIT
+
+    def on_start(self):
+        self.token = None
+        with self.client.post(
+            "/auth/login/",
+            data={"username": AUTH_EMAIL, "password": AUTH_PASSWORD},
+            catch_response=True,
+        ) as r:
+            if r.status_code == 200:
+                self.token = r.json().get("access_token")
+            else:
+                r.failure(f"login failed: {r.status_code}")
+
+    def _headers(self):
+        if not self.token:
+            return {}
+        return {"Authorization": f"Bearer {self.token}"}
+
+    @task(4)
+    def verify_token(self):
+        self.client.get("/verify-token/", headers=self._headers())
+
+    @task(3)
+    def profile(self):
+        self.client.get("/profile/", headers=self._headers())
+
+    @task(2)
+    def list_users_public(self):
+        self.client.get("/users/public/")
+
+    @task(1)
+    def health(self):
         self.client.get("/health")
 
 class DashboardServiceUser(HttpUser):
