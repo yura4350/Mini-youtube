@@ -43,10 +43,6 @@ class AuthServiceUser(HttpUser):
     def profile(self):
         self.client.get("/profile/", headers=self._headers())
 
-    @task(2)
-    def list_users_public(self):
-        self.client.get("/users/public/")
-
     @task(1)
     def health(self):
         self.client.get("/health", name="Auth API /health")
