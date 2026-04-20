@@ -61,7 +61,7 @@ class VideoServiceUser(HttpUser):
             if r.status_code == 200:
                 data = r.json()
                 if isinstance(data, list) and data:
-                    self.video_id = data[0].get("id")
+                    self.video_id = data[0].get("id") # Get the first video id
 
     @task(4)
     def list_videos(self):
@@ -82,6 +82,17 @@ class VideoServiceUser(HttpUser):
         if not self.video_id:
             return
         self.client.get(f"/videos/{self.video_id}/transcript")
+
+    @task(3)
+    def play_video(self):
+        if not self.video_id:
+            return
+        # Try partial content so load test doesn't always download entire file
+        self.client.get(
+            f"/videos/{self.video_id}/play",
+            headers={"Range": "bytes=0-2047"},
+            name="/videos/[id]/play",
+        )
 
     @task(1)
     def record_view(self):
