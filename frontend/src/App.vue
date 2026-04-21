@@ -30,7 +30,8 @@ const allUsers = ref<User[]>([])
 
 const QUICK_NOTIFICATION_TITLE_MAX_LENGTH = 72
 
-const showSearch = computed(() => route.name !== 'login' && route.name !== 'register')
+const HIDE_SEARCH_ROUTES = new Set(['login', 'register', 'reset-password'])
+const showSearch = computed(() => !HIDE_SEARCH_ROUTES.has(String(route.name ?? '')))
 
 function truncateText(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value

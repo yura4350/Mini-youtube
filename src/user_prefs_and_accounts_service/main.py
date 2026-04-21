@@ -17,11 +17,19 @@ import os
 import re
 from dotenv import load_dotenv
 
+from fastapi import BackgroundTasks
+import smtplib
+from email.message import EmailMessage
+
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
+from pydantic import EmailStr
+
 load_dotenv() # Load the variables from .env file
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 TOKEN_EXPIRES = 30
+RESET_TOKEN_EXPIRES = 15
 
 # password hashing (bcrypt)
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated="auto")
@@ -33,6 +41,19 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL) 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# Email setup
+conf = ConnectionConfig(
+    MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
+    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
+    MAIL_FROM=os.getenv("MAIL_FROM"),
+    MAIL_PORT=int(os.getenv("MAIL_PORT", 587)),
+    MAIL_SERVER=os.getenv("MAIL_SERVER"),
+    MAIL_STARTTLS=os.getenv("MAIL_STARTTLS") == "True",
+    MAIL_SSL_TLS=os.getenv("MAIL_SSL_TLS") == "True",
+    USE_CREDENTIALS=True,
+    VALIDATE_CERTS=True
+)
 
 # Database Model
 
@@ -170,6 +191,19 @@ class UserPreferencesUpdate(BaseModel):
     notifications: Optional[bool] = None
     ui_theme: Optional[str] = None
 
+# Pydantic Models for Password Reset
+class PasswordResetRequest(BaseModel):
+    email: str
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_password_strength(value)
+
 # Function to return user preferences (or create them with default valuesif they don't exist)
 def _get_or_create_user_preferences(db: Session, user_id: int) -> UserPreferences:
     user_prefs = db.query(UserPreferences).filter(UserPreferences.user_id == user_id).first()
@@ -226,6 +260,48 @@ def create_access_token(data:dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
     return encoded_jwt
+
+# create dictionary to hold reset tokens
+def create_password_reset_token(email: str):
+    expire = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXPIRES)
+    to_encode = {"sub": email, "exp": expire, "type": "reset"}
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_password_reset_token(token: str) -> Optional[str]:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "reset":
+            return None
+        return payload.get("sub")
+    except jwt.PyJWTError:
+        return None
+
+# Send reset email
+async def send_reset_email(recipient_email: str, token: str):
+    reset_link = f"http://localhost:5173/reset-password?token={token}"
+    
+    html_content = f"""
+    <html>
+        <body>
+            <h2>Password Reset Request</h2>
+            <p>You requested a password reset. Click the link below to set a new password:</p>
+            <p><a href="{reset_link}">Reset My Password</a></p>
+            <p>If you did not request this, please ignore this email.</p>
+        </body>
+    </html>
+    """
+
+    # Define the message package
+    message = MessageSchema(
+        subject="Reset Your Password",
+        recipients=[recipient_email], 
+        body=html_content,
+        subtype=MessageType.html
+    )
+
+    # Initialize FastMail and send
+    fm = FastMail(conf)
+    await fm.send_message(message)
 
 def verify_token(token:str) -> TokenData:
     try:
@@ -449,6 +525,41 @@ def get_public_user(user_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+### RESET PASSWORD ENDPOINTS ###
+@app.post("/auth/forgot-password")
+async def forgot_password(request: PasswordResetRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == request.email).first()
+
+    # Process if user exists and active. Send the same message regardless of the outcome
+    if user and user.is_active:
+        token = create_password_reset_token(user.email)
+        background_tasks.add_task(send_reset_email, user.email, token)
+    
+    return {"message": "If that email is in our system, a reset link has been sent."}
+
+@app.post("/auth/reset-password")
+def reset_password(request: PasswordResetConfirm, db: Session = Depends(get_db)):
+    email = verify_password_reset_token(request.token)
+
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+        
+    user = db.query(User).filter(User.email == email).first()
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+        
+    # Hash the new password and save it
+    user.hashed_pwd = get_pwd_hash(request.new_password)
+    db.commit()
+    
+    return {"message": "Password has been reset successfully"}
 
 ### USER PREFERENCES TABLE RELATED ENDPOINTS ###
 # Get user's own preferences
