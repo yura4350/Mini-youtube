@@ -488,6 +488,12 @@ h1 {
   color: var(--text-main);
   border-radius: 9px;
   padding: 9px 11px;
+  color-scheme: inherit;
+}
+
+.prefs-select option {
+  background-color: var(--bg-0);
+  color: var(--text-main);
 }
 
 .prefs-actions {
@@ -531,6 +537,15 @@ textarea {
   color: var(--text-main);
   border-radius: 9px;
   padding: 9px 11px;
+  color-scheme: inherit;
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  color: var(--text-body);
 }
 
 .actions {
@@ -553,6 +568,17 @@ button.ghost {
   border: 1px solid var(--border-heavy);
   background: transparent;
   color: var(--text-main);
+}
+
+button:disabled,
+button.ghost:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  color: var(--text-subtle);
+}
+
+button:disabled:not(.ghost) {
+  color: var(--text-inverse);
 }
 
 .tabs {
