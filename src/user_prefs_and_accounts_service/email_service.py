@@ -15,18 +15,20 @@ conf = ConnectionConfig(
     VALIDATE_CERTS=True,
 )
 
+def _frontend_base_url() -> str:
+    return os.getenv("FRONTEND_BASE_URL", "http://localhost:5173").strip().rstrip("/")
+
 
 async def send_reset_email(recipient_email: str, token: str) -> None:
     """Send an HTML email with a link to the frontend reset-password page.
-
     Args:
         recipient_email: Address to deliver the message to.
         token: Opaque reset JWT appended to the reset URL query string.
-
-    Note:
-        The reset link host is currently fixed to ``localhost:5173`` in the template.
+    The link uses ``FRONTEND_BASE_URL`` (default ``http://localhost:5173`` for local dev),
+    e.g. ``<base>/reset-password?token=...``.
     """
-    reset_link = f"http://localhost:5173/reset-password?token={token}"
+    base = _frontend_base_url()
+    reset_link = f"{base}/reset-password?token={token}"
     html_content = f"""
     <html>
         <body>
