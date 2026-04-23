@@ -3,7 +3,11 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from src.user_prefs_and_accounts_service.main import User, UserResponse, get_current_active_user, get_db
+
+from src.user_prefs_and_accounts_service.database import get_db
+from src.user_prefs_and_accounts_service.dependencies import get_current_active_user
+from src.user_prefs_and_accounts_service.models import User
+from src.user_prefs_and_accounts_service.schemas import UserResponse
 
 router = APIRouter(tags=["avatars"])
 
