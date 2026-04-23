@@ -29,3 +29,12 @@ app.include_router(auth_router.router)
 app.include_router(users_router.router)
 app.include_router(preferences_router.router)
 app.include_router(avatars_router)
+
+# Re-exports for tests / legacy imports
+from src.user_prefs_and_accounts_service.config import ALGORITHM, SECRET_KEY, TOKEN_EXPIRES
+from src.user_prefs_and_accounts_service.email_service import send_reset_email
+from src.user_prefs_and_accounts_service.schemas import UserResponse, UserUpdate
+from src.user_prefs_and_accounts_service.security import (
+    create_password_reset_token,
+    get_pwd_hash,
+)
