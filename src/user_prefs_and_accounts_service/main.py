@@ -6,6 +6,19 @@ from sqlalchemy.orm import sessionmaker, Session, relationship, mapped_column
 
 from src.user_prefs_and_accounts_service.models import Base, User, UserPreferences
 
+from src.user_prefs_and_accounts_service.schemas import (
+    PasswordResetConfirm,
+    PasswordResetRequest,
+    PublicUserResponse,
+    Token,
+    TokenData,
+    UserCreate,
+    UserPreferencesResponse,
+    UserPreferencesUpdate,
+    UserResponse,
+    UserUpdate,
+)
+
 from pydantic import BaseModel, field_validator
 from typing import Optional, List, Any, Dict
 
@@ -85,97 +98,7 @@ def _ensure_users_schema() -> None:
 
 _ensure_users_schema()
 
-# Pydantic Models (Dataclass). Definitions of API Models
-PASSWORD_MIN_LENGTH = 8
-
-
-def validate_password_strength(password: str) -> str:
-    if len(password) < PASSWORD_MIN_LENGTH:
-        raise ValueError(f"Password must be at least {PASSWORD_MIN_LENGTH} characters.")
-    if not re.search(r"[A-Za-z]", password):
-        raise ValueError("Password must include at least one letter.")
-    if not re.search(r"\d", password):
-        raise ValueError("Password must include at least one number.")
-    return password
-
-
-class UserCreate(BaseModel):
-    name:str
-    email:str
-    role:str
-    password:str
-
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, value: str) -> str:
-        return validate_password_strength(value)
-
-class UserUpdate(BaseModel):
-    name:Optional[str] = None
-    bio:Optional[str] = None
-    avatar:Optional[str] = None
-
-class UserResponse(BaseModel): # Determines what is given by a model
-    id:int
-    name:str
-    email:str
-    role:str
-    bio:Optional[str] = None
-    avatar:Optional[str] = None
-    is_active: bool
-
-    # Return data as objects instead of dictionaries
-    class Config:
-        from_attributes = True
-
-# New Pydantic Models
-class PublicUserResponse(BaseModel):
-    id: int
-    name: str
-    avatar: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-class UserLogin(BaseModel):
-    email: str
-    password: str
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class TokenData(BaseModel):
-    email: Optional[str] = None
-
-class UserPreferencesResponse(BaseModel):
-    user_id: int
-    privacy: str
-    notifications: bool
-    ui_theme: str
-
-    class Config:
-        from_attributes = True
-
-class UserPreferencesUpdate(BaseModel):
-    privacy: Optional[str] = None
-    notifications: Optional[bool] = None
-    ui_theme: Optional[str] = None
-
-# Pydantic Models for Password Reset
-class PasswordResetRequest(BaseModel):
-    email: str
-
-class PasswordResetConfirm(BaseModel):
-    token: str
-    new_password: str
-
-    @field_validator("new_password")
-    @classmethod
-    def validate_password(cls, value: str) -> str:
-        return validate_password_strength(value)
-
-# Function to return user preferences (or create them with default valuesif they don't exist)
+# Function to return user preferences (or create them with default values if they don't exist)
 def _get_or_create_user_preferences(db: Session, user_id: int) -> UserPreferences:
     user_prefs = db.query(UserPreferences).filter(UserPreferences.user_id == user_id).first()
 
