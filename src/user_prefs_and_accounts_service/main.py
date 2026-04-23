@@ -4,6 +4,8 @@ from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignK
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship, mapped_column
 
+from src.user_prefs_and_accounts_service.models import Base, User, UserPreferences
+
 from pydantic import BaseModel, field_validator
 from typing import Optional, List, Any, Dict
 
@@ -40,7 +42,6 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 engine = create_engine(DATABASE_URL) 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
 
 # Email setup
 conf = ConnectionConfig(
@@ -54,36 +55,6 @@ conf = ConnectionConfig(
     USE_CREDENTIALS=True,
     VALIDATE_CERTS=True
 )
-
-# Database Model
-
-# Main User Table
-class User(Base):
-    __tablename__ = "users"
-
-    id = mapped_column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable = False)
-    email = Column(String, nullable = False, unique=True)
-    role = Column(String, nullable = False)
-    bio = Column(String, nullable = True)
-    avatar = Column(String, nullable = True)
-    hashed_pwd = Column(String, nullable=False)
-    is_active = Column(Boolean, default=True)
-
-    preferences = relationship("UserPreferences", back_populates="user", uselist=False, cascade="all, delete-orphan")
-
-# User Preferences Table
-class UserPreferences(Base):
-    """Table to store user preferences"""
-
-    __tablename__ = "user_preferences"
-
-    user_id = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    privacy = mapped_column(String, nullable=False, default="public")
-    notifications = mapped_column(Boolean, nullable=False, default=True)
-    ui_theme = mapped_column(String, nullable=False, default="dark")
-
-    user = relationship("User", back_populates="preferences")
 
 Base.metadata.create_all(engine)
 
