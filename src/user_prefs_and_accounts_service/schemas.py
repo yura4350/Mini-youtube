@@ -2,8 +2,9 @@ import re
 from typing import List, Optional
 
 from pydantic import BaseModel, field_validator
+from .config import PASSWORD_MIN_LENGTH
 
-PASSWORD_MIN_LENGTH = 8
+
 
 """
 Pydantic Models (Dataclass). Definitions of API Models
