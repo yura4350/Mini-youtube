@@ -180,4 +180,7 @@ Known Bugs:
 - Services are containerized and started with Docker Compose.
 - After pulling new code, prefer `docker compose up -d --build` so latest code is applied.
 
+### Known bugs
+- If hosted on the Duke VM, SMTP doesn't work (most likely due to the university restrictions)
+
 ### Impressions
