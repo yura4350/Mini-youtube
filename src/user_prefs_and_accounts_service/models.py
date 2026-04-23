@@ -1,3 +1,4 @@
+"""SQLAlchemy ORM models for users and per-user preferences."""
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import mapped_column, relationship
@@ -6,6 +7,12 @@ Base = declarative_base()
 
 
 class User(Base):
+    """Application user account: identity, credentials, profile fields, and status.
+
+    Related :class:`UserPreferences` row is created on demand by the preferences
+    service. Passwords are stored hashed; ``email`` is unique.
+    """
+
     __tablename__ = "users"
 
     id = mapped_column(Integer, primary_key=True, index=True)
@@ -26,7 +33,10 @@ class User(Base):
 
 
 class UserPreferences(Base):
-    """Table to store user preferences"""
+    """Per-user settings: privacy, notifications, and UI theme.
+
+    Primary key is ``user_id``, foreign key to :class:`User` with cascade delete.
+    """
 
     __tablename__ = "user_preferences"
 

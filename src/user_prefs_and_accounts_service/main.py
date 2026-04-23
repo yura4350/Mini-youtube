@@ -1,3 +1,8 @@
+"""FastAPI application entrypoint: CORS, routers, and optional admin seeding.
+
+On import, ensures an admin user exists when ``SEED_ADMIN_*`` env vars are set.
+Exposes auth, users, preferences, avatars, and system routes under one ASGI app.
+"""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

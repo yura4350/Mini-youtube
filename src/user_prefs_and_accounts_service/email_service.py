@@ -1,3 +1,4 @@
+"""Outbound email for password reset using FastAPI-Mail."""
 import os
 
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
@@ -16,6 +17,15 @@ conf = ConnectionConfig(
 
 
 async def send_reset_email(recipient_email: str, token: str) -> None:
+    """Send an HTML email with a link to the frontend reset-password page.
+
+    Args:
+        recipient_email: Address to deliver the message to.
+        token: Opaque reset JWT appended to the reset URL query string.
+
+    Note:
+        The reset link host is currently fixed to ``localhost:5173`` in the template.
+    """
     reset_link = f"http://localhost:5173/reset-password?token={token}"
     html_content = f"""
     <html>

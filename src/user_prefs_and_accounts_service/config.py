@@ -1,3 +1,8 @@
+"""Environment-driven settings for the user preferences and accounts service.
+
+Loads values from ``.env`` via ``python-dotenv``. Constants here are shared by
+security, database setup, CORS, and request validation.
+"""
 import os
 from dotenv import load_dotenv
 

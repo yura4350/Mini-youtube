@@ -1,3 +1,4 @@
+"""Routes to read and update the current user's preferences row."""
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -14,6 +15,7 @@ router = APIRouter(tags=["preferences"])
 def get_user_preferences(
     current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
 ):
+    """Return preferences for the authenticated user, creating defaults if missing."""
     return get_or_create_user_preferences(db, current_user.id)
 
 
@@ -23,6 +25,7 @@ def update_user_preferences(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
+    """Merge non-null fields from the body into the user's preferences and save."""
     user_prefs = get_or_create_user_preferences(db, current_user.id)
     if update_prefs.privacy is not None:
         user_prefs.privacy = update_prefs.privacy

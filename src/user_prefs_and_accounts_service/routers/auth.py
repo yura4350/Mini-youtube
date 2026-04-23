@@ -1,3 +1,4 @@
+"""Authentication routes: register, login, forgot password, and reset password."""
 from datetime import timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -28,6 +29,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=UserResponse)
 def register_user(user: UserCreate, db: Session = Depends(get_db)) -> User:
+    """Create a new user with a hashed password if email and name are available.
+
+    Raises:
+        HTTPException: 404 if email exists; 400 if display name is taken.
+    """
     if db.query(User).filter(User.email == user.email).first():
         raise HTTPException(status_code=404, detail="User already created!")
     if db.query(User).filter(User.name == user.name).first():
@@ -50,6 +56,13 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)) -> User:
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ) -> dict:
+    """OAuth2 password flow: validate credentials and return a JWT access token.
+
+    ``username`` in the form is treated as the user's email.
+
+    Raises:
+        HTTPException: 401 for bad password, unknown user, or inactive account.
+    """
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not verify_pwd(form_data.password, user.hashed_pwd):
         raise HTTPException(
@@ -76,6 +89,10 @@ async def forgot_password(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> dict:
+    """Queue a reset email for active users; always returns the same generic message.
+
+    Avoids leaking whether an email is registered.
+    """
     user = db.query(User).filter(User.email == request.email).first()
     if user and user.is_active:
         token = create_password_reset_token(user.email)
@@ -87,6 +104,11 @@ async def forgot_password(
 def reset_password(
     request: PasswordResetConfirm, db: Session = Depends(get_db)
 ) -> dict:
+    """Set a new password when the reset token is valid and the user is active.
+
+    Raises:
+        HTTPException: 400 for invalid/expired token; 404 if user missing or inactive.
+    """
     email = verify_password_reset_token(request.token)
     if not email:
         raise HTTPException(
