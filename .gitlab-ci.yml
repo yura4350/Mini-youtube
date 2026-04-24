@@ -70,6 +70,10 @@ docker_compose_integration_checks:
     DOCKER_TLS_CERTDIR: "/certs"
   before_script:
     - apk add --no-cache curl docker-cli-compose
+    - echo "Creating dummy .env files so Docker Compose doesn't crash..." # This is a workaround to avoid the issue where Docker Compose crashes when the .env file is not present. Can be fixed by adding real secrets, but no need for now.
+    - touch .env
+    - mkdir -p ./src/user_prefs_and_accounts_service
+    - touch ./src/user_prefs_and_accounts_service/.env
   script:
     - echo "Spinning up the ephemeral environment..."
     - docker compose up -d
