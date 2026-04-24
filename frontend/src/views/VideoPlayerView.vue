@@ -276,6 +276,11 @@ function openUserProfileFromChat(userId: string) {
   void router.push({ name: 'user-profile', params: { userId } })
 }
 
+function openCurrentVideoAuthorProfile() {
+  if (!currentVideo.value) return
+  openUserProfileFromChat(String(currentVideo.value.authorId))
+}
+
 const relatedVideos = computed(() => {
   if (!currentVideo.value) return []
   return allVideos.value
@@ -794,9 +799,18 @@ watch(
       </div>
 
       <section class="channel-card">
-        <img :src="currentVideo.authorAvatar" :alt="currentVideo.authorName" class="avatar" />
+        <button
+          type="button"
+          class="channel-link"
+          :aria-label="`Open ${currentVideo.authorName} profile`"
+          @click="openCurrentVideoAuthorProfile"
+        >
+          <img :src="currentVideo.authorAvatar" :alt="currentVideo.authorName" class="avatar" />
+        </button>
         <div>
-          <p class="name">{{ currentVideo.authorName }}</p>
+          <button type="button" class="name channel-link" @click="openCurrentVideoAuthorProfile">
+            {{ currentVideo.authorName }}
+          </button>
           <p class="desc">{{ currentVideo.description }}</p>
         </div>
       </section>
@@ -1300,9 +1314,23 @@ h1 {
   border-radius: 999px;
 }
 
+.channel-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
 .name {
   color: var(--text-main);
   font-weight: 600;
+}
+
+.name:hover,
+.channel-link:hover .avatar {
+  opacity: 0.88;
 }
 
 .desc {
