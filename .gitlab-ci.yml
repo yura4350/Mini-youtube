@@ -59,6 +59,14 @@ main_vm_health_checks:
     - curl -fsS http://vcm-52527.vm.duke.edu:8004/health
     - curl -fsS http://vcm-52527.vm.duke.edu:8005/health
     - curl -fsS http://vcm-52527.vm.duke.edu:8006/health
+  
+  diagnostic_docker_check:
+  stage: integration
+  image: docker:24.0.5
+  script:
+    - echo "Testing if the university allows Docker Socket Binding..."
+    - docker info
+    - docker ps
 
 docker_compose_integration_checks:
   stage: integration
