@@ -55,7 +55,7 @@ services:
       db:
         condition: service_healthy
     env_file:
-      - path: .env
+      - .env
     environment:
       DATABASE_URL: postgresql://media_user:media_pass@db:5432/media_db
       PYTHONUNBUFFERED: "1"
