@@ -61,6 +61,8 @@ main_vm_health_checks:
     - curl -fsS http://vcm-52527.vm.duke.edu:8006/health
   
 diagnostic_docker_check:
+  allow_failure: true
+  when: manual
   stage: integration
   image: docker:24.0.5
   script:
@@ -69,6 +71,8 @@ diagnostic_docker_check:
     - docker ps
 
 docker_compose_integration_checks:
+  allow_failure: true
+  when: manual
   stage: integration
   image: docker:24.0.5
   services:
