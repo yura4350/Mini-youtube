@@ -1,5 +1,6 @@
 stages:
   - test
+  - vm_health_checks
 
 python_tests:
   stage: test
@@ -28,8 +29,8 @@ frontend_checks:
         echo "No frontend/package.json found."
       fi
 
-vm_health_checks:
-  stage: test_dev_vm
+dev_vm_health_checks:
+  stage: vm_health_checks
   image: curlimages/curl:8.12.1
   when: manual
   allow_failure: true
@@ -42,8 +43,9 @@ vm_health_checks:
     - curl -fsS http://vcm-52418.vm.duke.edu:8004/health
     - curl -fsS http://vcm-52418.vm.duke.edu:8005/health
     - curl -fsS http://vcm-52418.vm.duke.edu:8006/health
-  
-  stage: test_main_vm
+
+ main_vm_health_checks: 
+  stage: vm_health_checks
   mage: curlimages/curl:8.12.1
   when: manual
   allow_failure: true
