@@ -69,6 +69,11 @@ export async function fetchVideoById(videoId: string): Promise<VideoItem> {
   return item
 }
 
+export async function fetchVideosByUploader(userId: string): Promise<VideoItem[]> {
+  const items = await fetchVideos()
+  return items.filter((item) => item.authorId === userId)
+}
+
 export interface VideoTranscriptItem {
   video_id: string
   status: 'pending' | 'queued' | 'processing' | 'ready' | 'failed'
