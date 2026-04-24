@@ -66,8 +66,8 @@ docker_compose_integration_checks:
   services:
     - docker:24.0.5-dind
   variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
   before_script:
     - apk add --no-cache curl docker-cli-compose
     - echo "Creating dummy .env files so Docker Compose doesn't crash..." # This is a workaround to avoid the issue where Docker Compose crashes when the .env file is not present. Can be fixed by adding real secrets, but no need for now.
