@@ -5,38 +5,16 @@ import AppIcon from '@/components/icons/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { authService } from '@/services/auth'
 import { fetchSubscribedChannelIds } from '@/services/dashboard'
+import { createDirectChatSocket, isDirectMessagePayload, type DirectMessagePayload } from '@/services/chat'
+import { fetchNotifications, markNotificationsRead } from '@/services/notifications'
 import type { User } from '@/types/auth'
-
-interface DirectMessage {
-  type: 'direct_message'
-  room_key: string
-  sender_user_id: string
-  sender_username: string
-  peer_user_id: string
-  message: string
-  timestamp: string
-}
-
-function isDirectMessagePayload(value: unknown): value is DirectMessage {
-  if (!value || typeof value !== 'object') return false
-  const candidate = value as Record<string, unknown>
-  return (
-    candidate.type === 'direct_message' &&
-    typeof candidate.room_key === 'string' &&
-    typeof candidate.sender_user_id === 'string' &&
-    typeof candidate.sender_username === 'string' &&
-    typeof candidate.peer_user_id === 'string' &&
-    typeof candidate.message === 'string' &&
-    typeof candidate.timestamp === 'string'
-  )
-}
 
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const users = ref<User[]>([])
 const selectedPeerId = ref('')
-const messages = ref<DirectMessage[]>([])
+const messages = ref<DirectMessagePayload[]>([])
 const inputMessage = ref('')
 const status = ref('Disconnected')
 const chatHint = ref('')
@@ -77,21 +55,14 @@ function connectSocket() {
     return
   }
 
-  const explicitWsBase = (import.meta.env.VITE_COMM_WS_BASE_URL || '').trim()
-  const wsBase = explicitWsBase
-    ? explicitWsBase.replace(/\/$/, '')
-    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://localhost:8002`
-
-  const query = new URLSearchParams({
-    user_id: currentUser.id,
-    username: currentUser.username,
-    peer_id: selectedPeer.value.id,
-  })
-
   status.value = 'Connecting...'
   chatHint.value = ''
   messages.value = []
-  socket = new WebSocket(`${wsBase}/comm/direct-chat?${query.toString()}`)
+  socket = createDirectChatSocket({
+    userId: currentUser.id,
+    username: currentUser.username,
+    peerId: selectedPeer.value.id,
+  })
 
   socket.onopen = () => {
     status.value = 'Live'
@@ -100,7 +71,7 @@ function connectSocket() {
   socket.onmessage = async (event) => {
     try {
       const payload = JSON.parse(event.data) as
-        | { type: 'history'; messages: DirectMessage[] }
+        | { type: 'history'; messages: DirectMessagePayload[] }
         | { type: 'direct_message'; [key: string]: unknown }
         | { type: 'error'; message: string }
 
@@ -152,7 +123,7 @@ function sendMessage() {
 
 function pickPeer(peerId: string) {
   selectedPeerId.value = peerId
-  router.replace({ name: 'messages', query: { peer: peerId } })
+  router.replace({ name: 'chat', query: { peer: peerId } })
 }
 
 function openUserProfile(userId: string) {
@@ -182,8 +153,36 @@ async function refreshDirectoryAndSubscriptions() {
   }
 }
 
+async function clearUnreadDirectMessageNotifications() {
+  const currentUser = authStore.currentUser
+  if (!currentUser) return
+
+  try {
+    const unreadItems = await fetchNotifications({
+      userId: currentUser.id,
+      unreadOnly: true,
+      limit: 200,
+      offset: 0,
+    })
+    const unreadDirectIds = unreadItems
+      .filter((item) => item.type === 'direct_message')
+      .map((item) => item.id)
+
+    if (unreadDirectIds.length === 0) return
+
+    await markNotificationsRead({
+      notificationIds: unreadDirectIds,
+      recipientUserId: currentUser.id,
+    })
+    window.dispatchEvent(new CustomEvent('notifications-updated'))
+  } catch {
+    // Keep chat page functional even if notification sync fails.
+  }
+}
+
 onMounted(async () => {
   await authStore.hydrate()
+  await clearUnreadDirectMessageNotifications()
   await refreshDirectoryAndSubscriptions()
 
   const peerFromQuery = typeof route.query.peer === 'string' ? route.query.peer : ''
@@ -241,8 +240,8 @@ watch(
       <section class="chat-panel">
         <header class="chat-header">
           <h1>
-            <AppIcon name="bell" :size="16" />
-            {{ selectedPeer ? `Chat with ${selectedPeer.username}` : 'Direct Messages' }}
+            <AppIcon name="users" :size="16" />
+            {{ selectedPeer ? `Chat with ${selectedPeer.username}` : 'Chat' }}
           </h1>
           <div class="chat-header-actions">
             <button v-if="selectedPeer" type="button" class="profile-jump-btn" @click="openUserProfile(selectedPeer.id)">

@@ -8,6 +8,7 @@ import { fetchVideoById, fetchVideoTranscript, fetchVideos, updateVideo, deleteV
 import { toApiUploaderId } from '@/services/user-id'
 import { recordWatchEvent, fetchSubscribedChannelIds, subscribeToChannel, unsubscribeFromChannel } from '@/services/dashboard'
 import { summarizeVideo, fetchAiSummaryStatus, retryAiSummary, fetchAiTags, fetchAiTagTaxonomy } from '@/services/intelligence'
+import { createRealtimeVideoChatSocket, isVideoChatMessagePayload, type VideoChatMessagePayload } from '@/services/chat'
 import { useAuthStore } from '@/stores/auth'
 import type { VideoItem } from '@/types/video'
 
@@ -48,7 +49,7 @@ const transcriptSource = ref('')
 const transcriptLanguage = ref('')
 const transcriptUpdatedAt = ref('')
 const transcriptExpanded = ref(false)
-const chatMessages = ref<ChatMessage[]>([])
+const chatMessages = ref<VideoChatMessagePayload[]>([])
 const chatInput = ref('')
 const chatConnected = ref(false)
 const chatStatus = ref('Connecting...')
@@ -59,28 +60,6 @@ const VIEW_THRESHOLD_SECONDS = 10
 let chatSocket: WebSocket | null = null
 let watchEventInterval: ReturnType<typeof setInterval> | null = null
 let aiTagsPollInterval: ReturnType<typeof setInterval> | null = null
-
-interface ChatMessage {
-  type: 'chat_message' | 'system'
-  video_id: string
-  user_id: string
-  username: string
-  message: string
-  timestamp: string
-}
-
-function isChatMessagePayload(value: unknown): value is ChatMessage {
-  if (!value || typeof value !== 'object') return false
-  const candidate = value as Record<string, unknown>
-  return (
-    (candidate.type === 'chat_message' || candidate.type === 'system') &&
-    typeof candidate.video_id === 'string' &&
-    typeof candidate.user_id === 'string' &&
-    typeof candidate.username === 'string' &&
-    typeof candidate.message === 'string' &&
-    typeof candidate.timestamp === 'string'
-  )
-}
 
 const editForm = reactive({
   title: '',
@@ -201,19 +180,12 @@ function connectChat() {
     return
   }
 
-  const explicitWsBase = (import.meta.env.VITE_COMM_WS_BASE_URL || '').trim()
-  const wsBase = explicitWsBase
-    ? explicitWsBase.replace(/\/$/, '')
-    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://localhost:8002`
-
-  const params = new URLSearchParams({
-    video_id: currentVideo.value.id,
-    user_id: authStore.currentUser.id,
+  chatStatus.value = 'Connecting...'
+  chatSocket = createRealtimeVideoChatSocket({
+    videoId: currentVideo.value.id,
+    userId: authStore.currentUser.id,
     username: authStore.currentUser.username,
   })
-
-  chatStatus.value = 'Connecting...'
-  chatSocket = new WebSocket(`${wsBase}/comm/real-time-chat?${params.toString()}`)
 
   chatSocket.onopen = () => {
     chatConnected.value = true
@@ -223,7 +195,7 @@ function connectChat() {
   chatSocket.onmessage = (event) => {
     try {
       const payload = JSON.parse(event.data) as
-        | { type: 'history'; messages: ChatMessage[] }
+        | { type: 'history'; messages: VideoChatMessagePayload[] }
         | { type: 'chat_message' | 'system'; message: string; [key: string]: unknown }
         | { type: 'error'; message: string }
 
@@ -238,7 +210,7 @@ function connectChat() {
         return
       }
 
-      if (isChatMessagePayload(payload)) {
+      if (isVideoChatMessagePayload(payload)) {
         chatMessages.value.push(payload)
         setTimeout(scrollChatToBottom, 0)
       }

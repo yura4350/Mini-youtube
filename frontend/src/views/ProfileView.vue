@@ -332,8 +332,8 @@ onMounted(() => {
       <button :class="{ active: tab === 'subscriptions' }" @click="tab = 'subscriptions'">
         <AppIcon name="users" :size="14" /> Subscriptions
       </button>
-      <RouterLink to="/notifications" class="inbox-link">
-        <AppIcon name="bell" :size="14" /> Open notification inbox
+      <RouterLink to="/notifications" class="notifications-link">
+        <AppIcon name="bell" :size="14" /> Notifications
       </RouterLink>
     </section>
 
@@ -600,7 +600,7 @@ button:disabled:not(.ghost) {
   color: var(--text-main);
 }
 
-.inbox-link {
+.notifications-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -612,7 +612,7 @@ button:disabled:not(.ghost) {
   background: var(--bg-5);
 }
 
-.inbox-link:hover {
+.notifications-link:hover {
   border-color: var(--accent-outline-soft);
   background: var(--accent-wash);
   color: var(--text-main);

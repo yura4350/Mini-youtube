@@ -53,8 +53,9 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: '/messages',
-      name: 'messages',
+      path: '/chat',
+      alias: ['/messages'],
+      name: 'chat',
       component: () => import('../views/MessagesView.vue'),
       meta: { requiresAuth: true },
     },
