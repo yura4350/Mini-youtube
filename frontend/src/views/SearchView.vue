@@ -3,13 +3,13 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import VideoCard from '@/components/VideoCard.vue'
-import { searchVideos } from '@/services/dashboard'
+import { searchVideos, searchUsers } from '@/services/dashboard'
+import type { UserSearchResult } from '@/services/dashboard'
 import type { VideoItem } from '@/types/video'
-import { fetchSearchHistory } from '@/services/dashboard'
-import type { SearchHistoryItem } from '@/types/video'
 
 const route = useRoute()
-const results = ref<VideoItem[]>([])
+const videoResults = ref<VideoItem[]>([])
+const userResults = ref<UserSearchResult[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 
@@ -17,14 +17,16 @@ const query = computed(() => String(route.query.q || '').trim())
 
 async function loadResults(q: string) {
   if (!q) {
-    results.value = []
+    videoResults.value = []
+    userResults.value = []
     return
   }
   loading.value = true
   errorMessage.value = ''
-
   try {
-    results.value = await searchVideos(q)
+    const [videos, users] = await Promise.all([searchVideos(q), searchUsers(q)])
+    videoResults.value = videos
+    userResults.value = users
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Failed to load results'
   } finally {
@@ -32,57 +34,57 @@ async function loadResults(q: string) {
   }
 }
 
-onMounted(() => {
-  loadResults(query.value)
-})
-
-watch(query, (q) => {
-  loadResults(q)
-})
-
-const searchHistory = ref<SearchHistoryItem[]>([])
-
-onMounted(async () => {
-  try {
-    const userId = 'example-user-id' // Replace with actual user ID logic
-    searchHistory.value = await fetchSearchHistory(userId)
-  } catch (error) {
-    console.error('Failed to fetch search history:', error)
-  }
-})
+onMounted(() => loadResults(query.value))
+watch(query, loadResults)
 </script>
 
 <template>
   <main class="search-page">
     <header class="search-header">
       <h1><AppIcon name="search" :size="20" /> Search results for "{{ query }}"</h1>
-      <p>{{ results.length }} videos found</p>
+      <p>{{ videoResults.length }} video{{ videoResults.length !== 1 ? 's' : '' }}, {{ userResults.length }} channel{{ userResults.length !== 1 ? 's' : '' }}</p>
     </header>
 
     <section v-if="loading" class="status-box">
-      <p>Loading videos...</p>
+      <p>Loading results…</p>
     </section>
 
-    <section v-else-if="errorMessage" class="status-box">
+    <template v-else-if="!errorMessage">
+      <!-- Channels -->
+      <section v-if="userResults.length > 0" class="results-section">
+        <h2 class="section-title"><AppIcon name="users" :size="16" /> Channels</h2>
+        <div class="channel-grid">
+          <RouterLink
+            v-for="user in userResults"
+            :key="user.id"
+            :to="`/users/${user.id}`"
+            class="channel-card"
+          >
+            <div class="channel-avatar">{{ user.name.charAt(0).toUpperCase() }}</div>
+            <div class="channel-info">
+              <span class="channel-name">{{ user.name }}</span>
+              <span v-if="user.role === 'admin'" class="channel-badge">Admin</span>
+            </div>
+          </RouterLink>
+        </div>
+      </section>
+
+      <!-- Videos -->
+      <section v-if="videoResults.length > 0" class="results-section">
+        <h2 class="section-title"><AppIcon name="play" :size="16" /> Videos</h2>
+        <div class="video-grid">
+          <VideoCard v-for="video in videoResults" :key="video.id" :video="video" />
+        </div>
+      </section>
+
+      <section v-if="videoResults.length === 0 && userResults.length === 0" class="empty-state">
+        <AppIcon name="empty" :size="18" />
+        <p>No results matched your search.</p>
+      </section>
+    </template>
+
+    <section v-else class="status-box">
       <p>{{ errorMessage }}</p>
-    </section>
-
-    <section v-else-if="results.length > 0" class="video-grid">
-      <VideoCard v-for="video in results" :key="video.id" :video="video" />
-    </section>
-
-    <section v-else class="empty-state">
-      <AppIcon name="empty" :size="18" />
-      <p>No videos matched your search.</p>
-    </section>
-
-    <section>
-      <h2>Your Search History</h2>
-      <ul>
-        <li v-for="item in searchHistory" :key="item.searched_at">
-          {{ item.query }} ({{ new Date(item.searched_at).toLocaleString() }})
-        </li>
-      </ul>
     </section>
   </main>
 </template>
@@ -106,25 +108,83 @@ onMounted(async () => {
   color: var(--text-muted);
 }
 
+.results-section {
+  margin-top: 28px;
+}
+
+.section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 14px;
+}
+
+.channel-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.channel-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  background: var(--bg-1);
+  text-decoration: none;
+  color: var(--text-main);
+  min-width: 180px;
+  transition: background 0.15s;
+}
+
+.channel-card:hover {
+  background: var(--overlay-hover-mid);
+}
+
+.channel-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+  color: var(--text-inverse);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.channel-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.channel-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.channel-badge {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .video-grid {
-  margin-top: 18px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 18px;
 }
 
-.status-box {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 20px;
-  border: 1px solid var(--border-default);
-  border-radius: 14px;
-  padding: 20px;
-  color: var(--text-soft);
-  background: var(--bg-1);
-}
-
+.status-box,
 .empty-state {
   display: inline-flex;
   align-items: center;

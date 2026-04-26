@@ -24,7 +24,7 @@ from src.video_crud_service.models import (
 )
 from src.video_crud_service.videos import serialize_video
 from src.communication_service.models import Notification
-from src.dashboard_service.models import SearchHistory, WatchHistory, Subscription
+from src.dashboard_service.models import SearchHistory, WatchHistory, Subscription, User
 from src.dashboard_service.tag_taxonomy import TAG_TAXONOMY_SEED
 
 logging.basicConfig(level=logging.INFO)
@@ -952,6 +952,22 @@ def search_history(
             {"query": r.query, "searched_at": r.searched_at.isoformat()}
             for r in rows
         ],
+    }
+
+
+@app.get("/search/users")
+def search_users(q: str = Query(..., min_length=1), db: Session = Depends(get_db)):
+    """Return active users whose name matches the query."""
+    logger.info("User search requested: %s", q)
+    users = (
+        db.query(User)
+        .filter(User.is_active == True, User.name.ilike(f"%{q}%"))
+        .limit(20)
+        .all()
+    )
+    return {
+        "query": q,
+        "results": [{"id": u.id, "name": u.name, "role": u.role} for u in users],
     }
 
 

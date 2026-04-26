@@ -82,6 +82,23 @@ export async function fetchSearchSuggestions(query: string): Promise<string[]> {
  * @param limit - The maximum number of history items to fetch (default: 10).
  * @returns A promise resolving to the user's search history.
  */
+export interface UserSearchResult {
+  id: number
+  name: string
+  role: string
+}
+
+export async function searchUsers(query: string): Promise<UserSearchResult[]> {
+  const response = await fetch(
+    `${DASHBOARD_API_BASE_URL}/search/users?q=${encodeURIComponent(query)}`,
+  )
+  if (!response.ok) {
+    throw new Error(await parseError(response))
+  }
+  const payload = (await response.json()) as { query: string; results: UserSearchResult[] }
+  return payload.results
+}
+
 export async function fetchSearchHistory(userId: string, limit: number = 10): Promise<{ query: string; searched_at: string }[]> {
     const response = await fetch(
         `${DASHBOARD_API_BASE_URL}/search/history?user_id=${encodeURIComponent(userId)}&limit=${limit}`
