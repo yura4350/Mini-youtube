@@ -183,6 +183,6 @@ To do stress testing for a particular service, run `locust -f locustfile.py Dash
 - After pulling new code, prefer `docker compose up -d --build` so latest code is applied.
 
 ### Known bugs
-- If hosted on the Duke VM, SMTP doesn't work (most likely due to the university restrictions)
+- If hosted on the Duke VM, SMTP doesn't work (due to the university restrictions (`nc -vz smtp.gmail.com 587` does not return anything and times out on the VM, but works locally))
 
 ### Impressions
