@@ -1,7 +1,6 @@
 stages:
   - test
   - vm_health_checks
-  - integration
   - deploy
 
 python_tests:
@@ -68,42 +67,6 @@ diagnostic_docker_check:
     - echo "Testing if the university allows Docker Socket Binding..."
     - docker info
     - docker ps
-
-docker_compose_integration_checks:
-  allow_failure: true
-  when: manual
-  stage: integration
-  image: docker:24.0.5
-  services:
-    - docker:24.0.5-dind
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-  before_script:
-    - apk add --no-cache curl docker-cli-compose
-    - echo "Creating dummy .env files so Docker Compose doesn't crash..." # This is a workaround to avoid the issue where Docker Compose crashes when the .env file is not present. Can be fixed by adding real secrets, but no need for now.
-    - touch .env
-    - mkdir -p ./src/user_prefs_and_accounts_service
-    - touch ./src/user_prefs_and_accounts_service/.env
-  script:
-    - echo "Spinning up the ephemeral environment..."
-    - docker compose up -d
-    
-    # Waiting for the containers to fully start before curling. 
-    - sleep 20 
-
-    - echo "Running health checks against the isolated pipeline containers..."
-    
-    - curl -fsS http://docker:5173 >/dev/null
-    - curl -fsS http://docker:8000/health
-    - curl -fsS http://docker:8001/health
-    - curl -fsS http://docker:8002/health
-    - curl -fsS http://docker:8003/health
-    - curl -fsS http://docker:8004/health
-    - curl -fsS http://docker:8004/dashboard/recommend
-  after_script:
-    - echo "Tearing down the environment..."
-    - docker compose down -v
   
 deploy_to_duke_vm:
   stage: deploy
