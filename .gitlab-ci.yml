@@ -107,24 +107,24 @@ docker_compose_integration_checks:
     - echo "Tearing down the environment..."
     - docker compose down -v
   
-  deploy_to_duke_vm:
-    stage: deploy
-    image: alpine:latest
-    before_script:
-      # Install ssh-agent if not already installed
-      - 'command -v ssh-agent >/dev/null || ( apk add --update openssh )' 
-      # Run ssh-agent
-      - eval $(ssh-agent -s)
-      # Add the SSH key stored in SSH_PRIVATE_KEY variable to the agent store
-      - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-      # Create the SSH directory and give it the right permissions
-      - mkdir -p ~/.ssh
-      - chmod 700 ~/.ssh
-      # Add the server's host key to known_hosts to prevent interactive prompts
-      - ssh-keyscan $SERVER_IP >> ~/.ssh/known_hosts
-      - chmod 644 ~/.ssh/known_hosts
-    script:
-      # Connect via SSH to navigate to the directory, pull latest changes, and rebuild Docker containers
-      - ssh $SERVER_USER@$SERVER_IP "cd media_server_team02 && git pull origin dev && docker compose down && docker compose up -d --build"
-    only:
-      - dev
+deploy_to_duke_vm:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    # Install ssh-agent if not already installed
+    - 'command -v ssh-agent >/dev/null || ( apk add --update openssh )' 
+    # Run ssh-agent
+    - eval $(ssh-agent -s)
+    # Add the SSH key stored in SSH_PRIVATE_KEY variable to the agent store
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    # Create the SSH directory and give it the right permissions
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    # Add the server's host key to known_hosts to prevent interactive prompts
+    - ssh-keyscan $SERVER_IP >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    # Connect via SSH to navigate to the directory, pull latest changes, and rebuild Docker containers
+    - ssh $SERVER_USER@$SERVER_IP "cd media_server_team02 && git pull origin dev && docker compose down && docker compose up -d --build"
+  only:
+    - dev
