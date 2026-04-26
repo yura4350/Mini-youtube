@@ -22,7 +22,7 @@ Hours Spent:
 
 ### Resource Attributions
 
-FastAPI docs, SQLAlchemy docs, PostgreSQL docs, Docker docs.
+FastAPI docs, SQLAlchemy docs, PostgreSQL docs, Docker docs, Gitlab CI/CD Docs, Locust docs
 
 ### Running the Program
 
