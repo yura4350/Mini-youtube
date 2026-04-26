@@ -1,3 +1,8 @@
+/* Native controls (select, scrollbars, etc.) follow the active palette when this matches `data-ui-theme`. */
+html {
+  color-scheme: dark;
+}
+
 :root {
   /* Surfaces */
   --bg-0: #0f0f0f;
@@ -91,6 +96,7 @@ body {
 }
 
 html[data-ui-theme='light'] {
+  color-scheme: light;
   --bg-0: #f4f4f5;
   --bg-1: #ffffff;
   --bg-2: #f9fafb;

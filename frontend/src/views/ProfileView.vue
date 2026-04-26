@@ -362,11 +362,8 @@ onMounted(() => {
       <button :class="{ active: tab === 'subscriptions' }" @click="tab = 'subscriptions'">
         <AppIcon name="users" :size="14" /> Subscriptions
       </button>
-      <button :class="{ active: tab === 'subscribers' }" @click="tab = 'subscribers'">
-        <AppIcon name="users" :size="14" /> Subscribers
-      </button>
-      <RouterLink to="/notifications" class="inbox-link">
-        <AppIcon name="bell" :size="14" /> Open notification inbox
+      <RouterLink to="/notifications" class="notifications-link">
+        <AppIcon name="bell" :size="14" /> Notifications
       </RouterLink>
     </section>
 
@@ -536,6 +533,12 @@ h1 {
   color: var(--text-main);
   border-radius: 9px;
   padding: 9px 11px;
+  color-scheme: inherit;
+}
+
+.prefs-select option {
+  background-color: var(--bg-0);
+  color: var(--text-main);
 }
 
 .prefs-actions {
@@ -579,6 +582,15 @@ textarea {
   color: var(--text-main);
   border-radius: 9px;
   padding: 9px 11px;
+  color-scheme: inherit;
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  color: var(--text-body);
 }
 
 .actions {
@@ -603,6 +615,17 @@ button.ghost {
   color: var(--text-main);
 }
 
+button:disabled,
+button.ghost:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  color: var(--text-subtle);
+}
+
+button:disabled:not(.ghost) {
+  color: var(--text-inverse);
+}
+
 .tabs {
   margin-top: 14px;
   display: flex;
@@ -622,7 +645,7 @@ button.ghost {
   color: var(--text-main);
 }
 
-.inbox-link {
+.notifications-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -634,7 +657,7 @@ button.ghost {
   background: var(--bg-5);
 }
 
-.inbox-link:hover {
+.notifications-link:hover {
   border-color: var(--accent-outline-soft);
   background: var(--accent-wash);
   color: var(--text-main);

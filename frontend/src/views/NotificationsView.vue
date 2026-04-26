@@ -115,10 +115,10 @@ onUnmounted(() => {
 
 <template>
   <main class="notifications-page">
-    <section class="inbox-shell">
-      <header class="inbox-header">
+    <section class="notifications-shell">
+      <header class="notifications-header">
         <div>
-          <h1><AppIcon name="bell" :size="18" /> Notification Inbox</h1>
+          <h1><AppIcon name="bell" :size="18" /> Notifications</h1>
           <p>See new video alerts and subscription updates.</p>
         </div>
 
@@ -183,14 +183,14 @@ onUnmounted(() => {
   padding: 20px 16px 34px;
 }
 
-.inbox-shell {
+.notifications-shell {
   border: 1px solid var(--border-default);
   border-radius: 16px;
   background: var(--bg-6);
   padding: 14px;
 }
 
-.inbox-header {
+.notifications-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -198,7 +198,7 @@ onUnmounted(() => {
   margin-bottom: 12px;
 }
 
-.inbox-header h1 {
+.notifications-header h1 {
   color: var(--text-main);
   display: inline-flex;
   align-items: center;
@@ -206,7 +206,7 @@ onUnmounted(() => {
   font-size: 24px;
 }
 
-.inbox-header p {
+.notifications-header p {
   color: var(--text-muted);
   margin-top: 4px;
 }
@@ -335,7 +335,7 @@ button.ghost.active {
 }
 
 @media (max-width: 820px) {
-  .inbox-header {
+  .notifications-header {
     flex-direction: column;
     align-items: stretch;
   }

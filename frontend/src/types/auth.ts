@@ -29,6 +29,15 @@ export interface LoginPayload {
   password: string
 }
 
+export interface ForgotPasswordPayload {
+  email: string
+}
+
+export interface ResetPasswordPayload {
+  token: string
+  newPassword: string
+}
+
 export interface AuthResult {
   ok: boolean
   message: string
@@ -70,3 +79,8 @@ export type UserPreferencesPatch = {
 export type PreferencesUpdateResult =
   | { ok: true; preferences: UserPreferencesDTO }
   | { ok: false; message: string }
+
+export type PasswordResetResult = {
+  ok: boolean
+  message: string
+}

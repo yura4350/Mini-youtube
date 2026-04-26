@@ -1,24 +1,56 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { useRouter } from 'vue-router'
 import type { VideoItem } from '@/types/video'
 import { formatViews, timeAgo } from '@/services/video-format'
 import AppIcon from '@/components/icons/AppIcon.vue'
 
-defineProps<{ video: VideoItem }>()
+const props = defineProps<{ video: VideoItem }>()
+const router = useRouter()
+
+function openVideo() {
+  void router.push(`/video/${props.video.id}`)
+}
+
+function openAuthorProfile(event?: Event) {
+  event?.stopPropagation()
+  void router.push(`/users/${props.video.authorId}`)
+}
+
+function handleCardKeydown(event: KeyboardEvent) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    openVideo()
+  }
+}
 </script>
 
 <template>
-  <RouterLink :to="`/video/${video.id}`" class="video-card">
+  <article
+    class="video-card"
+    role="link"
+    tabindex="0"
+    @click="openVideo"
+    @keydown="handleCardKeydown"
+  >
     <div class="thumb-wrap">
       <img :src="video.thumbnail" :alt="video.title" class="thumb" />
       <span class="duration">{{ video.duration }}</span>
     </div>
 
     <div class="meta">
-      <img :src="video.authorAvatar" :alt="video.authorName" class="avatar" />
+      <button
+        type="button"
+        class="author-trigger"
+        :aria-label="`Open ${video.authorName} profile`"
+        @click="openAuthorProfile"
+      >
+        <img :src="video.authorAvatar" :alt="video.authorName" class="avatar" />
+      </button>
       <div class="meta-text">
         <h3>{{ video.title }}</h3>
-        <p class="author">{{ video.authorName }}</p>
+        <button type="button" class="author author-trigger" @click="openAuthorProfile">
+          {{ video.authorName }}
+        </button>
         <p class="sub">
           <span><AppIcon name="views" :size="13" /> {{ formatViews(video.views) }} views</span>
           <span>•</span>
@@ -26,7 +58,7 @@ defineProps<{ video: VideoItem }>()
         </p>
       </div>
     </div>
-  </RouterLink>
+  </article>
 </template>
 
 <style scoped>
@@ -34,6 +66,7 @@ defineProps<{ video: VideoItem }>()
   display: grid;
   gap: 10px;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .thumb-wrap {
@@ -72,6 +105,14 @@ defineProps<{ video: VideoItem }>()
   gap: 10px;
 }
 
+.author-trigger {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
 .avatar {
   width: 38px;
   height: 38px;
@@ -89,6 +130,13 @@ defineProps<{ video: VideoItem }>()
 .author {
   color: var(--text-soft);
   font-size: 13px;
+  display: inline-flex;
+  width: fit-content;
+}
+
+.author:hover,
+.author-trigger:hover .avatar {
+  opacity: 0.88;
 }
 
 .sub {
