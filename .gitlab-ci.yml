@@ -58,16 +58,6 @@ main_vm_health_checks:
     - curl -fsS http://vcm-52527.vm.duke.edu:8004/health
     - curl -fsS http://vcm-52527.vm.duke.edu:8005/health
   
-diagnostic_docker_check:
-  allow_failure: true
-  when: manual
-  stage: integration
-  image: docker:24.0.5
-  script:
-    - echo "Testing if the university allows Docker Socket Binding..."
-    - docker info
-    - docker ps
-  
 deploy_to_duke_vm:
   stage: deploy
   image: alpine:latest
