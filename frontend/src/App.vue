@@ -4,13 +4,14 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { connectNotificationStream, fetchNotifications } from '@/services/notifications'
-import { fetchSearchSuggestions } from '@/services/dashboard'
+import { fetchSearchSuggestions, fetchSearchHistory } from '@/services/dashboard'
 
 const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 const searchInput = ref('')
 const suggestions = ref<string[]>([])
+const historyItems = ref<string[]>([])
 const showSuggestions = ref(false)
 let suggestionsDebounce: ReturnType<typeof setTimeout> | null = null
 const unreadNotificationCount = ref(0)
@@ -133,14 +134,28 @@ function logout() {
   router.push('/login')
 }
 
+async function onSearchFocus() {
+  if (searchInput.value.trim()) return
+  if (!authStore.currentUser) return
+  try {
+    const history = await fetchSearchHistory(String(authStore.currentUser.id), 10)
+    historyItems.value = history.map((h) => h.query)
+    showSuggestions.value = historyItems.value.length > 0
+  } catch {
+    historyItems.value = []
+  }
+}
+
 function onSearchInput() {
   const q = searchInput.value.trim()
   if (suggestionsDebounce) clearTimeout(suggestionsDebounce)
   if (!q) {
     suggestions.value = []
-    showSuggestions.value = false
+    // restore history view if available
+    showSuggestions.value = historyItems.value.length > 0
     return
   }
+  historyItems.value = []
   suggestionsDebounce = setTimeout(async () => {
     try {
       suggestions.value = await fetchSearchSuggestions(q)
@@ -181,13 +196,22 @@ function submitSearch() {
             type="text"
             placeholder="Search videos"
             autocomplete="off"
+            @focus="onSearchFocus"
             @input="onSearchInput"
             @blur="showSuggestions = false"
           />
           <ul v-if="showSuggestions" class="suggestions-list">
+            <li v-if="historyItems.length" class="suggestions-label">Recent</li>
+            <li
+              v-for="h in historyItems"
+              :key="'h-' + h"
+              class="suggestions-history-item"
+              @mousedown.prevent="selectSuggestion(h)"
+            >{{ h }}</li>
+            <li v-if="suggestions.length" class="suggestions-label">Suggestions</li>
             <li
               v-for="s in suggestions"
-              :key="s"
+              :key="'s-' + s"
               @mousedown.prevent="selectSuggestion(s)"
             >{{ s }}</li>
           </ul>
@@ -305,6 +329,26 @@ function submitSearch() {
 .suggestions-list li:hover {
   background: var(--overlay-hover);
   color: var(--text-main);
+}
+
+.suggestions-label {
+  padding: 6px 14px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint, #888);
+  cursor: default;
+  pointer-events: none;
+}
+
+.suggestions-label:hover {
+  background: none;
+  color: var(--text-faint, #888);
+}
+
+.suggestions-history-item {
+  padding-left: 28px;
 }
 
 .searchbar button {
