@@ -136,6 +136,14 @@ class DashboardServiceUser(HttpUser):
     def recommend(self):
         self.client.get("/dashboard/recommend", params={"user_id": random.choice(self.user_ids)})
 
+    @task(3)
+    def subscriptions_feed(self):
+        self.client.get("/subscriptions/feed", params={"user_id": random.choice(self.user_ids)})
+
+    @task(2)
+    def watched_history(self):
+        self.client.get("/user/history/watched", params={"user_id": random.choice(self.user_ids)})
+
 
 class CommunicationServiceUser(HttpUser):
     host = "http://vcm-52527.vm.duke.edu:8002"
