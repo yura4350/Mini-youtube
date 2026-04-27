@@ -6,8 +6,10 @@ import VideoCard from '@/components/VideoCard.vue'
 import { searchVideos, searchUsers } from '@/services/dashboard'
 import type { UserSearchResult } from '@/services/dashboard'
 import type { VideoItem } from '@/types/video'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
+const authStore = useAuthStore()
 const videoResults = ref<VideoItem[]>([])
 const userResults = ref<UserSearchResult[]>([])
 const loading = ref(false)
@@ -24,7 +26,8 @@ async function loadResults(q: string) {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [videos, users] = await Promise.all([searchVideos(q), searchUsers(q)])
+    const userId = authStore.currentUser?.id
+    const [videos, users] = await Promise.all([searchVideos(q, userId), searchUsers(q)])
     videoResults.value = videos
     userResults.value = users
   } catch (error) {
