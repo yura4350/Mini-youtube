@@ -9,7 +9,7 @@ Name: MiniTube — Iurii Beliaev, Temesgen Tewolde, Changmin Shin, Zhao Huang
 
 Start Date: March 18, 2026
 
-Finish Date: 04/27April 26, 2026
+Finish Date: April 27, 2026
 
 Hours Spent: 120 hours total (30 hours per teammate)
 
@@ -23,7 +23,18 @@ Hours Spent: 120 hours total (30 hours per teammate)
 
 ### Resource Attributions
 
-FastAPI docs, SQLAlchemy docs, PostgreSQL docs, Docker docs, Gitlab CI/CD Docs, Locust docs
+- **FastAPI** — framework used to build all backend microservices (REST endpoints, dependency injection, request validation)
+- **SQLAlchemy** — ORM used for all database models and queries across services
+- **PostgreSQL** — relational database for storing users, videos, transcripts, messages, and tags
+- **Docker / Docker Compose** — containerization and multi-service orchestration for local dev and VM deployment
+- **Vue.js / Vite** — frontend framework and build tool for the web UI
+- **Pydantic** — data validation and schema definitions for API request/response models
+- **PyJWT** — JWT token generation and verification for user authentication
+- **faster-whisper** — automatic speech recognition (ASR) for video transcription
+- **OpenAI API** — LLM-based video summarization in the intelligence service
+- **WebSockets** — real-time messaging in the communication service
+- **Locust** — load and concurrency testing framework
+- **GitLab CI/CD** — automated test pipeline and deployment to Duke VMs
 
 ### Running the Program
 
@@ -175,6 +186,96 @@ To do stress testing for a particular service, run `locust -f locustfile.py [Des
 - Dashboard Service
   - 100+ concurrent users
 
+
+### Microservice API Overview
+
+| Service | Port | Owner | Responsibilities |
+|---------|------|-------|-----------------|
+| **Video CRUD** | 8000 | Temesgen | Video upload, streaming/playback, metadata CRUD, thumbnail generation, ASR transcription, view counting, AI tagging |
+| **Admin** | 8001 | Changmin | System health metrics, application logs, user management (ban/delete), content deletion |
+| **Communication** | 8002 | Zhao | Real-time WebSocket chat, new-video and subscription notifications, notification inbox |
+| **User Accounts & Prefs** | 8003 | Iurii | Registration, login/logout, JWT auth, profile management, password reset, UI settings (light/dark mode) |
+| **Dashboard** | 8004 | Changmin | Video search, watch history, subscription feed, video recommendations |
+| **Intelligence** | 8005 | Zhao | AI-generated video summaries (OpenAI or rules-based fallback), canonical tag taxonomy, auto-tagging |
+
+### Security and Data
+
+- **Authentication:** JWT tokens issued on login, verified on every protected endpoint. Tokens include user ID and role (`user` / `admin`).
+- **Password storage:** bcrypt hashing via passlib — plaintext passwords are never stored.
+- **Role-based access:** Admin-only endpoints (user management, content deletion, metrics) reject non-admin tokens with 403.
+- **Authorization fix (Sprint 4):** Video update/delete endpoints originally trusted the `uploader_id` supplied by the client. This was identified as a security issue (#97) and fixed so the server now extracts the user identity from the JWT instead.
+- **Input validation:** Pydantic schemas enforce types, required fields, and password strength (minimum length, character requirements) at the API boundary.
+- **Data integrity:** Foreign key constraints and `TRUNCATE ... CASCADE` patterns ensure referential consistency across videos, transcripts, summaries, and tags.
+
+### Assumptions
+
+- Video files are stored on the local filesystem (bind-mounted Docker volume) rather than object storage like S3. This simplifies deployment but limits horizontal scaling.
+- A single shared PostgreSQL instance serves all microservices. Each service uses its own set of tables but shares the same DB container.
+- SMTP email (password reset emails) is assumed to work in local development. On Duke VMs, outbound SMTP is blocked by university firewall — the reset flow degrades gracefully (token is generated and logged, but the email is not delivered).
+- AI tagging is constrained to a canonical tag taxonomy rather than free-form tags. This keeps tags consistent and searchable at the cost of flexibility.
+- Video transcription (`faster-whisper`) runs synchronously after upload on the `tiny` model for speed. Accuracy is reduced compared to larger models, which was an acceptable trade-off for demo performance.
+- The frontend is built with environment variables baked in at Docker build time (`VITE_*`). This means the VM hostname must be set before building — runtime config injection was out of scope.
+
+### Challenging Bug: Avatar Not Reflecting Across the App
+
+After implementing avatar upload, avatars displayed correctly on the profile page but appeared as the default placeholder everywhere else (video cards, player page, comments). The bug was traced to the fact that the frontend was reading the avatar URL from the video's uploader metadata cached at upload time, not from the live user profile. The video service stored a snapshot of the uploader's avatar path at upload time. The fix was to have the frontend fetch the uploader's current profile from the user accounts service using the `uploader_id` on the video, rather than relying on the stale embedded field. This required adding a cross-service call in the frontend and adjusting the video card and player components to resolve avatars dynamically.
+
+### Project Management: Roles and Sprint Milestones
+
+**Sprint 1 (Mar 23 – Mar 28): Core Infrastructure**
+- Iurii: User authentication backend — registration, login, password hashing, JWT management (User Accounts & Preferences service)
+- Temesgen: Basic video upload API, metadata storage, video playback endpoint (Video CRUD service)
+- Zhao: Frontend scaffolding — create account page, login page, main dashboard, video upload page, video player page, search bar
+- Changmin: Dashboard & Search API skeleton, Admin Dashboard API skeleton
+
+**Sprint 2 (Mar 27 – Apr 5): Backend Foundation & Integration**
+- Iurii: Database schema finalization, SQLite → PostgreSQL migration, Docker setup, user profile backend
+- Temesgen: Frontend–backend integration for video CRUD
+- Changmin: Frontend–backend integration for dashboard and admin APIs
+- Zhao: Communication service backend (notifications)
+- Everyone: Write tests for their respective services
+
+**Sprint 3 (Apr 3 – Apr 15): Feature Completion**
+- Iurii: User accounts & preferences continued (profile UI, settings, privacy, avatar, admin seeding), CI/CD Docker container
+- Temesgen: Overall application flow — connecting services end-to-end, video CRUD test suite
+- Zhao: Communication API completion (real-time chat, subscriptions), Intelligence API (AI summarization, auto-tagging)
+- Changmin: Dashboard and Admin API completion, overall application integration
+
+**Sprint 4 (Apr 10 – Apr 27): Polish, Stability, and Bug Fixes**
+- Bug bash fixes across all services
+- Iurii: CI/CD pipeline (VM deployment), stress testing, dark/light mode CSS, email debug, service refactor
+- Temesgen: User profile/channel page, avatar bug fix, video–user mapping, JWT authorization security fix, video delete fix
+- Changmin: Subscriber list, search history, subscription UI, unique username enforcement, concurrency/rate limit testing
+- Zhao: Intelligence auto-tagging automation, UI fixes (cache clearing, login redirect, password strength, chat navigation)
+
+**Feature Milestones**
+
+| Feature | Status |
+|---------|--------|
+| User registration & login with JWT | Done |
+| Video upload, playback, metadata CRUD | Done |
+| Search with keyword matching | Done |
+| User dashboard & profile | Done |
+| Real-time WebSocket chat | Done |
+| AI summarization & auto-tagging | Done |
+| Admin dashboard (health, metrics, logs, user management) | Done |
+| Concurrency / stress testing | Done |
+| CI/CD pipeline with VM deployment | Done |
+| Rate limiting | Not completed |
+| Email verification | Not completed (SMTP blocked on Duke VMs) |
+
+### How LLMs Were Used
+
+LLMs were used as a coding assistant throughout the project — not to generate large features wholesale, but to accelerate specific implementation tasks and unblock problems. Key uses:
+
+- **GitHub Copilot** — inline autocomplete during routine backend and frontend coding (boilerplate, repetitive patterns).
+- **Claude Code** — used for three specific tasks where we knew what we wanted but needed help with the implementation details:
+  - Implementing `GET /admin/metrics` — we described the endpoint requirements and used the output as a starting point, then reviewed and adapted it.
+  - Structuring log handling in the admin service — Claude suggested `MemoryHandler` as a pattern for buffering log records, which we evaluated and adopted.
+  - Improving video thumbnail generation — Claude identified the `ffmpeg thumbnail` filter as the right tool to avoid blank first-frames, a detail we wouldn't have found quickly in the docs.
+- **OpenAI API (in-product)** — the intelligence service itself calls OpenAI to generate video summaries. This is a feature, not a development tool.
+
+In all cases, LLM-generated code was reviewed before merging. We did not use LLMs for security-critical code (auth, JWT handling) or database schema design, where we wanted full understanding and control.
 
 ### Notes/Assumptions
 
