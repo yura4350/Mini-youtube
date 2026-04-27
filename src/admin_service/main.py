@@ -1,13 +1,17 @@
 import logging
 import logging.handlers
 import os
-import subprocess
 import time
+
+import psutil
 from datetime import datetime, timezone
 from pathlib import Path
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.video_crud_service.database import SessionLocal
@@ -23,7 +27,20 @@ logging.getLogger().addHandler(_memory_handler)
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Admin Service")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Uvicorn calls logging.config.dictConfig() on startup, which replaces all
+    # root-logger handlers and removes _memory_handler. Re-attach it here so
+    # the buffer captures records from the first real request onward.
+    root = logging.getLogger()
+    if _memory_handler not in root.handlers:
+        root.addHandler(_memory_handler)
+    root.setLevel(logging.INFO)
+    yield
+
+
+app = FastAPI(title="Admin Service", lifespan=lifespan)
 
 _default_origins = [
     "http://localhost:5173",
@@ -95,8 +112,8 @@ def get_logs():
 def get_user_count(db: Session = Depends(get_db)):
     """Return total and active user counts."""
     logger.info("User count requested")
-    total = db.query(User).count()
-    active = db.query(User).filter(User.is_active == True).count()
+    total = db.execute(text("SELECT COUNT(*) FROM users")).scalar() or 0
+    active = db.execute(text("SELECT COUNT(*) FROM users WHERE is_active = true")).scalar() or 0
     return {"total": total, "active": active}
 
 
@@ -148,5 +165,5 @@ def get_metrics():
         "uptime_seconds": round(time.time() - _start_time, 2),
         "total_requests": _request_count,
         "log_entries": len(_memory_handler.buffer),
-        "memory_rss_mb": round(int(subprocess.check_output(["ps", "-o", "rss=", "-p", str(os.getpid())]).decode().strip() or 0) / 1024, 2),
+        "memory_rss_mb": round(psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024, 2),
     }

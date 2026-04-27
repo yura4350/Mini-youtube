@@ -73,7 +73,7 @@ class VideoServiceUser(HttpUser):
             return
         self.client.get(f"/videos/{self.video_id}")
 
-    @task(2)
+    @task(1)
     def transcript(self):
         if not self.video_id:
             return
@@ -88,6 +88,15 @@ class VideoServiceUser(HttpUser):
             f"/videos/{self.video_id}/play",
             headers={"Range": "bytes=0-2047"},
             name="/videos/[id]/play",
+        )
+
+    @task(1)
+    def thumbnail(self):
+        if not self.video_id:
+            return
+        self.client.get(
+            f"/videos/{self.video_id}/thumbnail",
+            name="/videos/[id]/thumbnail",
         )
 
     @task(1)
@@ -110,17 +119,30 @@ class DashboardServiceUser(HttpUser):
 
     @task(4)
     def search(self):
+        # Omit user_id to avoid writing search history on every request
         self.client.get(
             "/search",
-            params={
-                "q": random.choice(self.search_terms),
-                "user_id": random.choice(self.user_ids),
-            },
+            params={"q": random.choice(self.search_terms)},
+        )
+
+    @task(3)
+    def search_suggestions(self):
+        self.client.get(
+            "/search/suggestions",
+            params={"q": random.choice(self.search_terms)},
         )
 
     @task(3)
     def recommend(self):
         self.client.get("/dashboard/recommend", params={"user_id": random.choice(self.user_ids)})
+
+    @task(3)
+    def subscriptions_feed(self):
+        self.client.get("/subscriptions/feed", params={"user_id": random.choice(self.user_ids)})
+
+    @task(2)
+    def watched_history(self):
+        self.client.get("/user/history/watched", params={"user_id": random.choice(self.user_ids)})
 
 
 class CommunicationServiceUser(HttpUser):
@@ -134,7 +156,7 @@ class CommunicationServiceUser(HttpUser):
     def health(self):
         self.client.get("/health", name="Communication API /health")
 
-    @task(4)
+    @task(1)
     def create_notification(self):
         self.client.post(
             "/comm/notifications",
@@ -149,7 +171,7 @@ class CommunicationServiceUser(HttpUser):
             },
         )
 
-    @task(3)
+    @task(4)
     def list_notifications(self):
         self.client.get("/comm/notifications", params={"user_id": random.choice(self.user_ids)})
 
@@ -163,6 +185,10 @@ class IntelligenceServiceUser(HttpUser):
         self.client.get("/health", name="Intelligence API /health")
 
     @task(4)
+    def ai_health(self):
+        self.client.get("/ai/health", name="Intelligence API /ai/health")
+
+    @task(1)
     def summarize(self):
         self.client.post(
             "/ai/summarize",
@@ -179,6 +205,14 @@ class AdminServiceUser(HttpUser):
     host = "http://vcm-52527.vm.duke.edu:8001"
     wait_time = between(1, 3)
 
-    @task(5)
+    @task(4)
     def health(self):
         self.client.get("/health", name="Admin API /health")
+
+    @task(3)
+    def admin_health(self):
+        self.client.get("/admin/health", name="Admin API /admin/health")
+
+    @task(2)
+    def users_count(self):
+        self.client.get("/admin/users/count", name="Admin API /admin/users/count")

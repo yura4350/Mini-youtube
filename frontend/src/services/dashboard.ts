@@ -48,9 +48,10 @@ export async function fetchRecommended(userId?: string): Promise<VideoItem[]> {
   return items
 }
 
-export async function searchVideos(query: string): Promise<VideoItem[]> {
+export async function searchVideos(query: string, userId?: string): Promise<VideoItem[]> {
+  const qs = userId ? `&user_id=${encodeURIComponent(userId)}` : ''
   const response = await fetch(
-    `${DASHBOARD_API_BASE_URL}/search?q=${encodeURIComponent(query)}`,
+    `${DASHBOARD_API_BASE_URL}/search?q=${encodeURIComponent(query)}${qs}`,
   )
 
   if (!response.ok) {

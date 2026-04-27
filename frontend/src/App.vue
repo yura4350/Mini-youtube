@@ -225,19 +225,22 @@ function submitSearch() {
           ><AppIcon name="upload" :size="16" /> Upload</RouterLink
         >
         <RouterLink v-if="authStore.isAuthenticated" to="/notifications" class="notify-link">
-            <span class="notify-icon-wrap">
-              <AppIcon name="bell" :size="16" />
-              <span v-if="unreadNotificationCount > 0" class="notify-badge">
-                {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
-              </span>
+          <span class="nav-icon-wrap">
+            <AppIcon name="bell" :size="16" />
+            <span v-if="unreadNotificationCount > 0" class="nav-badge">
+              {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
             </span>
-            Notifications
-        </RouterLink>
-        <RouterLink v-if="authStore.isAuthenticated" to="/chat" class="chat-link"
-          ><AppIcon name="users" :size="16" /> Chat
-          <span v-if="unreadChatCount > 0" class="chat-badge">
-            {{ unreadChatCount > 99 ? '99+' : unreadChatCount }}
           </span>
+          Notifications
+        </RouterLink>
+        <RouterLink v-if="authStore.isAuthenticated" to="/chat" class="chat-link">
+          <span class="nav-icon-wrap">
+            <AppIcon name="users" :size="16" />
+            <span v-if="unreadChatCount > 0" class="nav-badge">
+              {{ unreadChatCount > 99 ? '99+' : unreadChatCount }}
+            </span>
+          </span>
+          Chat
         </RouterLink>
         <RouterLink v-if="!authStore.isAuthenticated" to="/login"
           ><AppIcon name="login" :size="16" /> Login</RouterLink
@@ -405,36 +408,12 @@ function submitSearch() {
   border-radius: 8px;
 }
 
-.notify-link {
-  position: relative;
-}
-
-.chat-link {
-  position: relative;
-}
-
-.chat-badge {
-  position: absolute;
-  right: -8px;
-  top: -8px;
-  min-width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  padding: 0 5px;
-  font-size: 11px;
-  display: grid;
-  place-items: center;
-  background: var(--accent-soft);
-  color: var(--text-inverse);
-  border: 1px solid rgba(0, 0, 0, 0.45);
-}
-
-.notify-icon-wrap {
+.nav-icon-wrap {
   position: relative;
   display: inline-flex;
 }
 
-.notify-badge {
+.nav-badge {
   position: absolute;
   right: -10px;
   top: -9px;

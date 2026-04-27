@@ -7,7 +7,7 @@ def test_upload_video_success(client, test_db, sample_video_file, tmp_path):
     """Test successful video upload."""
     # Mock the upload directory and thumbnail generation
     with patch("src.video_crud_service.videos.UPLOAD_DIR", tmp_path):
-        with patch("src.video_crud_service.videos._generate_first_frame_thumbnail", return_value=False):
+        with patch("src.video_crud_service.videos._generate_thumbnail", return_value=False):
             with patch("src.video_crud_service.videos._notify_subscribers_new_video", new_callable=AsyncMock) as mock_notify:
                 response = client.post(
                     "/videos/upload",
@@ -46,7 +46,7 @@ def test_upload_video_success(client, test_db, sample_video_file, tmp_path):
 
 def test_upload_rejects_non_canonical_tag(client, sample_video_file, tmp_path):
     with patch("src.video_crud_service.videos.UPLOAD_DIR", tmp_path):
-        with patch("src.video_crud_service.videos._generate_first_frame_thumbnail", return_value=False):
+        with patch("src.video_crud_service.videos._generate_thumbnail", return_value=False):
             response = client.post(
                 "/videos/upload",
                 data={
@@ -90,7 +90,7 @@ def test_upload_missing_required_field(client):
 def test_upload_negative_views_converted_to_zero(client, test_db, sample_video_file, tmp_path):
     """Test that negative views/likes are converted to 0."""
     with patch("src.video_crud_service.videos.UPLOAD_DIR", tmp_path):
-        with patch("src.video_crud_service.videos._generate_first_frame_thumbnail", return_value=False):
+        with patch("src.video_crud_service.videos._generate_thumbnail", return_value=False):
             response = client.post(
                 "/videos/upload",
                 data={
@@ -111,7 +111,7 @@ def test_upload_negative_views_converted_to_zero(client, test_db, sample_video_f
 def test_upload_octet_stream_with_video_extension(client, sample_video_file, tmp_path):
     """Test upload with application/octet-stream mime type but video extension."""
     with patch("src.video_crud_service.videos.UPLOAD_DIR", tmp_path):
-        with patch("src.video_crud_service.videos._generate_first_frame_thumbnail", return_value=False):
+        with patch("src.video_crud_service.videos._generate_thumbnail", return_value=False):
             response = client.post(
                 "/videos/upload",
                 data={"title": "Test", "uploader_id": 1},
@@ -123,7 +123,7 @@ def test_upload_octet_stream_with_video_extension(client, sample_video_file, tmp
 
 def test_upload_notification_failure_does_not_fail_upload(client, sample_video_file, tmp_path):
     with patch("src.video_crud_service.videos.UPLOAD_DIR", tmp_path):
-        with patch("src.video_crud_service.videos._generate_first_frame_thumbnail", return_value=False):
+        with patch("src.video_crud_service.videos._generate_thumbnail", return_value=False):
             with patch(
                 "src.video_crud_service.videos._notify_subscribers_new_video",
                 new_callable=AsyncMock,
