@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { authService } from '@/services/auth'
+import { subscribeToChannel, unsubscribeFromChannel } from '@/services/dashboard'
 import VideoCard from '@/components/VideoCard.vue'
 import { fetchVideosByUploader } from '@/services/videos'
 import { useAuthStore } from '@/stores/auth'
@@ -14,6 +15,8 @@ const authStore = useAuthStore()
 
 const loading = ref(true)
 const errorMessage = ref('')
+const actionMessage = ref('')
+const subscribeLoading = ref(false)
 const profileUser = ref<User | null>(null)
 const uploadedVideos = ref<VideoItem[]>([])
 
@@ -29,9 +32,20 @@ const isOwnProfile = computed(() => {
   return authStore.currentUser.id === profileUser.value.id
 })
 
+const isSubscribed = computed(() => {
+  if (!authStore.currentUser || !profileUser.value) return false
+  return authStore.currentUser.subscribedTo.includes(profileUser.value.id)
+})
+
+const chatRoute = computed(() => {
+  if (!profileUser.value) return { name: 'chat' as const }
+  return { name: 'chat' as const, query: { peer: profileUser.value.id } }
+})
+
 async function loadProfile() {
   loading.value = true
   errorMessage.value = ''
+  actionMessage.value = ''
   profileUser.value = null
   uploadedVideos.value = []
 
@@ -55,6 +69,33 @@ async function loadProfile() {
   }
 
   errorMessage.value = result.message
+}
+
+async function toggleSubscription() {
+  if (!authStore.currentUser || !profileUser.value || isOwnProfile.value) return
+
+  subscribeLoading.value = true
+  actionMessage.value = ''
+  const currentUserId = authStore.currentUser.id
+  const targetUserId = profileUser.value.id
+
+  try {
+    if (isSubscribed.value) {
+      await unsubscribeFromChannel(currentUserId, targetUserId)
+      if (authStore.currentUser) {
+        authStore.currentUser.subscribedTo = authStore.currentUser.subscribedTo.filter((id) => id !== targetUserId)
+      }
+    } else {
+      await subscribeToChannel(currentUserId, targetUserId)
+      if (authStore.currentUser && !authStore.currentUser.subscribedTo.includes(targetUserId)) {
+        authStore.currentUser.subscribedTo = [...authStore.currentUser.subscribedTo, targetUserId]
+      }
+    }
+  } catch (error) {
+    actionMessage.value = error instanceof Error ? error.message : 'Subscription update failed.'
+  } finally {
+    subscribeLoading.value = false
+  }
 }
 
 onMounted(loadProfile)
@@ -98,11 +139,25 @@ watch(
           <AppIcon name="user" :size="14" /> This is your account.
           <RouterLink to="/profile" class="inline-link">Open full profile</RouterLink>
         </p>
+        <p v-else-if="authStore.currentUser && !isSubscribed" class="chat-hint">
+          You can send one message even without subscribing. Subscribe to unlock full two-way chat.
+        </p>
 
         <div class="stats">
           <span><AppIcon name="users" :size="14" /> User id {{ profileUser.id }}</span>
           <span><AppIcon name="video" :size="14" /> {{ uploadedVideos.length }} uploads</span>
         </div>
+
+        <div class="actions" v-if="authStore.currentUser && !isOwnProfile">
+          <button type="button" class="subscribe-btn" :disabled="subscribeLoading" @click="toggleSubscription">
+            <AppIcon name="users" :size="14" />
+            {{ subscribeLoading ? 'Updating...' : isSubscribed ? 'Unsubscribe' : 'Subscribe' }}
+          </button>
+          <RouterLink :to="chatRoute" class="chat-btn">
+            <AppIcon name="users" :size="14" /> Chat
+          </RouterLink>
+        </div>
+        <p v-if="actionMessage" class="error action-error">{{ actionMessage }}</p>
       </div>
     </section>
 
@@ -227,6 +282,64 @@ h1 {
   gap: 14px;
   flex-wrap: wrap;
   font-size: 14px;
+}
+
+.actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subscribe-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-medium);
+  border-radius: 9px;
+  color: var(--text-body);
+  padding: 8px 12px;
+  background: var(--bg-5);
+  cursor: pointer;
+}
+
+.subscribe-btn:hover {
+  border-color: var(--accent-outline-soft);
+  background: var(--accent-wash);
+  color: var(--text-main);
+}
+
+.subscribe-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  border: 1px solid var(--border-medium);
+  border-radius: 9px;
+  color: var(--text-body);
+  padding: 8px 12px;
+  background: var(--bg-5);
+}
+
+.chat-btn:hover {
+  border-color: var(--accent-outline-soft);
+  background: var(--accent-wash);
+  color: var(--text-main);
+}
+
+.chat-hint {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.action-error {
+  margin-top: 10px;
 }
 
 .uploads-section {

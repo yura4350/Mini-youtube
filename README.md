@@ -3,15 +3,15 @@ Media Server
 
 This project implements a Media Server composed of several micro-services.
 
-Name: 
+Name: MiniTube — Iurii Beliaev, Temesgen Tewolde, Changmin Shin, Zhao Huang
 
 ### Timeline
 
-Start Date: 
+Start Date: March 18, 2026
 
-Finish Date: 
+Finish Date: 04/27April 26, 2026
 
-Hours Spent:
+Hours Spent: 120 hours total (30 hours per teammate)
 
 
 ### Tutorial, LLMs, and other Code used
@@ -19,6 +19,7 @@ Hours Spent:
 - GitHub Copilot (GPT-5.3-Codex) for setup/debug support.
 - Claude Code (Sonnet-4.6) for assistance in implementing `GET /admin/metrics`.
 - Claude Code (Sonnet-4.6) for suggestions on handling logs in admin API. Utilized MemoryHandler as suggested.
+- Claude Code (Opus) for improving video thumbnail generation to use a representative frame instead of the first frame.
 
 ### Resource Attributions
 
@@ -150,31 +151,29 @@ Main class: `src/video_crud_service/main.py`, `src/admin_service/main.py`, etc.
 
 Data files needed: Database is auto-initialized by PostgreSQL container
 
-Known Bugs:
-
 ### Testing the program
 
 #### Concurrency and Load Testing (on the `vcm-52527.vm.duke.edu`)
 
-To do stress testing for a particular service, run `locust -f locustfile.py DashboardServiceUser`
+To do stress testing for a particular service, run `locust -f locustfile.py [Desired Service]ServiceUser`
 
 - Admin Dashboard (only /health endpoint) - no need for large throughput
-  - 250 concurrent users+
+  - 100+ concurrent users
 
 - Video Service
-  - 100+, 500 concurrent shut down the service
+  - 100+ concurrent users
 
 - Auth Service
-  - 70+, some errors at 100+ concurrent users
+  - 100+ concurrent users
 
 - Intelligence Service
-  - 500+ concurrent users
+  - 100+ concurrent users
 
 - Communication Service
-  - 500+ concurrent users
+  - 100+ concurrent users
 
 - Dashboard Service
-  - 500+ concurrent users
+  - 100+ concurrent users
 
 
 ### Notes/Assumptions
