@@ -26,10 +26,12 @@ const peers = computed(() => {
   if (!currentUser) return []
 
   const allOtherUsers = users.value.filter((user) => user.id !== currentUser.id)
+  if (currentUser.isAdmin) return allOtherUsers
+
   const subscribedIds = new Set(currentUser.subscribedTo)
   const subscribedUsers = allOtherUsers.filter((user) => subscribedIds.has(user.id))
 
-  return subscribedUsers.length > 0 ? subscribedUsers : allOtherUsers
+  return subscribedUsers
 })
 
 const selectedPeer = computed(() => peers.value.find((peer) => peer.id === selectedPeerId.value) || null)
