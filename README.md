@@ -3,15 +3,15 @@ Media Server
 
 This project implements a Media Server composed of several micro-services.
 
-Name: 
+Name: MiniTube — Iurii Beliaev, Temesgen Tewolde, Changmin Shin, Zhao Huang
 
 ### Timeline
 
-Start Date: 
+Start Date: March 18, 2026
 
-Finish Date: 
+Finish Date: April 26, 2026
 
-Hours Spent:
+Hours Spent: 120 hours total (30 hours per teammate)
 
 
 ### Tutorial, LLMs, and other Code used
@@ -19,6 +19,7 @@ Hours Spent:
 - GitHub Copilot (GPT-5.3-Codex) for setup/debug support.
 - Claude Code (Sonnet-4.6) for assistance in implementing `GET /admin/metrics`.
 - Claude Code (Sonnet-4.6) for suggestions on handling logs in admin API. Utilized MemoryHandler as suggested.
+- Claude Code (Opus) for improving video thumbnail generation to use a representative frame instead of the first frame.
 
 ### Resource Attributions
 
@@ -149,8 +150,6 @@ docker-compose logs -f video  # Specific service (video, admin, communication, e
 Main class: `src/video_crud_service/main.py`, `src/admin_service/main.py`, etc.
 
 Data files needed: Database is auto-initialized by PostgreSQL container
-
-Known Bugs:
 
 ### Testing the program
 
