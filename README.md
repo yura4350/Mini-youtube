@@ -159,22 +159,22 @@ Known Bugs:
 To do stress testing for a particular service, run `locust -f locustfile.py [Desired Service]ServiceUser`
 
 - Admin Dashboard (only /health endpoint) - no need for large throughput
-  - 250 concurrent users+
+  - 100+ concurrent users
 
 - Video Service
-  - 100+, 500 concurrent shut down the service
+  - 100+ concurrent users
 
 - Auth Service
-  - 70+, some errors at 100+ concurrent users
+  - 100+ concurrent users
 
 - Intelligence Service
-  - 500+ concurrent users
+  - 100+ concurrent users
 
 - Communication Service
-  - 500+ concurrent users
+  - 100+ concurrent users
 
 - Dashboard Service
-  - 500+ concurrent users
+  - 100+ concurrent users
 
 
 ### Notes/Assumptions
