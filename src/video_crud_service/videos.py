@@ -63,7 +63,7 @@ def _truncate_text(value: str, max_length: int) -> str:
     return f"{value[:max_length - 3].rstrip()}..."
 
 
-def _generate_first_frame_thumbnail(video_path: Path, thumbnail_path: Path) -> bool:
+def _generate_thumbnail(video_path: Path, thumbnail_path: Path) -> bool:
     try:
         subprocess.run(
             [
@@ -72,8 +72,8 @@ def _generate_first_frame_thumbnail(video_path: Path, thumbnail_path: Path) -> b
                 "-i",
                 str(video_path),
                 "-vf",
-                "select=eq(n\\,0)",
-                "-vframes",
+                "thumbnail=300",
+                "-frames:v",
                 "1",
                 str(thumbnail_path),
             ],
@@ -407,7 +407,7 @@ async def upload_video(
     content = await file.read()
     saved_path.write_bytes(content)
 
-    generated = _generate_first_frame_thumbnail(saved_path, _thumbnail_path(video_id))
+    generated = _generate_thumbnail(saved_path, _thumbnail_path(video_id))
     resolved_thumbnail_url = f"/videos/{video_id}/thumbnail" if generated else thumbnail_url
 
     selected_tags = _canonicalize_user_selected_tags(tags)
@@ -548,7 +548,7 @@ def record_view(video_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{video_id}/thumbnail")
 def get_video_thumbnail(video_id: str, db: Session = Depends(get_db)):
-    """Serve thumbnail generated from frame 1 of the video."""
+    """Serve thumbnail generated from a representative frame of the video."""
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -559,7 +559,7 @@ def get_video_thumbnail(video_id: str, db: Session = Depends(get_db)):
 
     thumbnail_path = _thumbnail_path(video_id)
     if not thumbnail_path.exists():
-        generated = _generate_first_frame_thumbnail(video_path, thumbnail_path)
+        generated = _generate_thumbnail(video_path, thumbnail_path)
         if not generated:
             raise HTTPException(status_code=404, detail="Thumbnail not available")
 
