@@ -156,7 +156,7 @@ Known Bugs:
 
 #### Concurrency and Load Testing (on the `vcm-52527.vm.duke.edu`)
 
-To do stress testing for a particular service, run `locust -f locustfile.py DashboardServiceUser`
+To do stress testing for a particular service, run `locust -f locustfile.py [Desired Service]ServiceUser`
 
 - Admin Dashboard (only /health endpoint) - no need for large throughput
   - 250 concurrent users+
