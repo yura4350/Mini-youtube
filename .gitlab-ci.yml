@@ -1,5 +1,7 @@
 stages:
   - test
+  - vm_health_checks
+  - deploy
 
 python_tests:
   stage: test
@@ -28,8 +30,8 @@ frontend_checks:
         echo "No frontend/package.json found."
       fi
 
-vm_health_checks:
-  stage: test
+dev_vm_health_checks:
+  stage: vm_health_checks
   image: curlimages/curl:8.12.1
   when: manual
   allow_failure: true
@@ -40,4 +42,43 @@ vm_health_checks:
     - curl -fsS http://vcm-52418.vm.duke.edu:8002/health
     - curl -fsS http://vcm-52418.vm.duke.edu:8003/health
     - curl -fsS http://vcm-52418.vm.duke.edu:8004/health
-    - curl -fsS http://vcm-52418.vm.duke.edu:8004/dashboard/recommend
+    - curl -fsS http://vcm-52418.vm.duke.edu:8005/health
+
+main_vm_health_checks: 
+  stage: vm_health_checks
+  image: curlimages/curl:8.12.1
+  when: manual
+  allow_failure: true
+  script:
+    - curl -fsS http://vcm-52527.vm.duke.edu:5173 >/dev/null
+    - curl -fsS http://vcm-52527.vm.duke.edu:8000/health
+    - curl -fsS http://vcm-52527.vm.duke.edu:8001/health
+    - curl -fsS http://vcm-52527.vm.duke.edu:8002/health
+    - curl -fsS http://vcm-52527.vm.duke.edu:8003/health
+    - curl -fsS http://vcm-52527.vm.duke.edu:8004/health
+    - curl -fsS http://vcm-52527.vm.duke.edu:8005/health
+  
+deploy_to_duke_vm:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    # Install ssh-agent if not already installed
+    - 'command -v ssh-agent >/dev/null || ( apk add --update openssh )' 
+    # Run ssh-agent. We need to do this to add the SSH key to the agent store.
+    - eval $(ssh-agent -s)
+    # Add the SSH key stored in SSH_PRIVATE_KEY variable to the agent store. This is the private key for the SSH key pair we use to connect to the Duke VM.
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    # Create the SSH directory and give it the right permissions
+    - mkdir -p ~/.ssh
+    # Give the SSH directory the right permissions
+    - chmod 700 ~/.ssh
+    # Add the server's host key to known_hosts to prevent interactive prompts
+    - ssh-keyscan $SERVER_IP >> ~/.ssh/known_hosts
+    # Give the known_hosts file the right permissions
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    # Connect via SSH to navigate to the directory, pull latest changes, and rebuild Docker containers
+    - ssh $SERVER_USER@$SERVER_IP "cd media_server_team02 && git checkout main && git pull origin main && docker compose down && docker compose up -d --build"
+  only:
+    # Only run this job on the dev branch
+    - main

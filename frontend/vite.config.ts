@@ -8,7 +8,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 export default defineConfig({
   plugins: [
     vue(),
-    vueDevTools(),
+    // vueDevTools(),
   ],
   resolve: {
     alias: {
@@ -16,6 +16,9 @@ export default defineConfig({
     },
   },
   server: {
+    hmr: {
+      overlay: false,
+    },
     allowedHosts: ['vcm-52418.vm.duke.edu', 'vcm-52527.vm.duke.edu', 'localhost', '127.0.0.1'],
   },
 })

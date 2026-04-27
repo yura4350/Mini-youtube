@@ -22,7 +22,7 @@ Hours Spent:
 
 ### Resource Attributions
 
-FastAPI docs, SQLAlchemy docs, PostgreSQL docs, Docker docs.
+FastAPI docs, SQLAlchemy docs, PostgreSQL docs, Docker docs, Gitlab CI/CD Docs, Locust docs
 
 ### Running the Program
 
@@ -152,10 +152,37 @@ Data files needed: Database is auto-initialized by PostgreSQL container
 
 Known Bugs:
 
+### Testing the program
+
+#### Concurrency and Load Testing (on the `vcm-52527.vm.duke.edu`)
+
+To do stress testing for a particular service, run `locust -f locustfile.py DashboardServiceUser`
+
+- Admin Dashboard (only /health endpoint) - no need for large throughput
+  - 250 concurrent users+
+
+- Video Service
+  - 100+, 500 concurrent shut down the service
+
+- Auth Service
+  - 70+, some errors at 100+ concurrent users
+
+- Intelligence Service
+  - 500+ concurrent users
+
+- Communication Service
+  - 500+ concurrent users
+
+- Dashboard Service
+  - 500+ concurrent users
+
 
 ### Notes/Assumptions
 
 - Services are containerized and started with Docker Compose.
 - After pulling new code, prefer `docker compose up -d --build` so latest code is applied.
+
+### Known bugs
+- If hosted on the Duke VM, SMTP doesn't work (due to the university restrictions (`nc -vz smtp.gmail.com 587` does not return anything and times out on the VM, but works locally))
 
 ### Impressions

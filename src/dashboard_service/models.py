@@ -1,8 +1,25 @@
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String, DateTime, UniqueConstraint
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, UniqueConstraint
+from sqlalchemy.orm import declarative_base
 
 from src.video_crud_service.database import Base
+
+# Separate base so User is never passed to video_crud's create_all.
+# The `users` table is owned by user_prefs_and_accounts_service.
+DashboardExternalBase = declarative_base()
+
+
+class User(DashboardExternalBase):
+    """Read-only mirror of the `users` table for search queries."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    role = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
 
 
 class SearchHistory(Base):

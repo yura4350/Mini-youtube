@@ -49,7 +49,10 @@ export async function fetchVideos(): Promise<VideoItem[]> {
 }
 
 export async function fetchVideoById(videoId: string): Promise<VideoItem> {
-  const response = await fetch(`${API_BASE_URL}/videos/${videoId}`)
+  const [response, users] = await Promise.all([
+    fetch(`${API_BASE_URL}/videos/${videoId}`),
+    authService.getAllUsers(),
+  ])
 
   if (!response.ok) {
     throw new Error(await parseError(response))
@@ -57,12 +60,18 @@ export async function fetchVideoById(videoId: string): Promise<VideoItem> {
 
   const payload = (await response.json()) as VideoApiItem
   const item = mapVideoApiItemToVideoItem(payload)
-  const result = await authService.fetchPublicProfile(payload.uploader_id)
-  if (result.ok) {
-    item.authorName = result.user.username
-    item.authorAvatar = result.user.avatar
+  const userMap = new Map(users.map((u) => [u.id, u]))
+  const user = userMap.get(String(payload.uploader_id))
+  if (user) {
+    item.authorName = user.username
+    item.authorAvatar = user.avatar
   }
   return item
+}
+
+export async function fetchVideosByUploader(userId: string): Promise<VideoItem[]> {
+  const items = await fetchVideos()
+  return items.filter((item) => item.authorId === userId)
 }
 
 export interface VideoTranscriptItem {

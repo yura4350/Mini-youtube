@@ -3,8 +3,11 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import AppIcon from '@/components/icons/AppIcon.vue'
 import { authService } from '@/services/auth'
+import VideoCard from '@/components/VideoCard.vue'
+import { fetchVideosByUploader } from '@/services/videos'
 import { useAuthStore } from '@/stores/auth'
 import type { User } from '@/types/auth'
+import type { VideoItem } from '@/types/video'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -12,6 +15,7 @@ const authStore = useAuthStore()
 const loading = ref(true)
 const errorMessage = ref('')
 const profileUser = ref<User | null>(null)
+const uploadedVideos = ref<VideoItem[]>([])
 
 const numericUserId = computed(() => {
   const raw = route.params.userId
@@ -29,6 +33,7 @@ async function loadProfile() {
   loading.value = true
   errorMessage.value = ''
   profileUser.value = null
+  uploadedVideos.value = []
 
   const id = numericUserId.value
   if (Number.isNaN(id)) {
@@ -37,11 +42,15 @@ async function loadProfile() {
     return
   }
 
-  const result = await authService.fetchPublicProfile(id)
+  const [result, videos] = await Promise.all([
+    authService.fetchPublicProfile(id),
+    fetchVideosByUploader(String(id)),
+  ])
   loading.value = false
 
   if (result.ok) {
     profileUser.value = result.user
+    uploadedVideos.value = videos
     return
   }
 
@@ -92,7 +101,22 @@ watch(
 
         <div class="stats">
           <span><AppIcon name="users" :size="14" /> User id {{ profileUser.id }}</span>
+          <span><AppIcon name="video" :size="14" /> {{ uploadedVideos.length }} uploads</span>
         </div>
+      </div>
+    </section>
+
+    <section v-if="profileUser" class="uploads-section">
+      <div class="section-head">
+        <h2><AppIcon name="video" :size="16" /> Uploaded videos</h2>
+      </div>
+
+      <p v-if="uploadedVideos.length === 0" class="muted">
+        {{ profileUser.username }} has not uploaded any videos yet.
+      </p>
+
+      <div v-else class="uploads-grid">
+        <VideoCard v-for="video in uploadedVideos" :key="video.id" :video="video" />
       </div>
     </section>
   </main>
@@ -100,7 +124,7 @@ watch(
 
 <style scoped>
 .public-profile-page {
-  max-width: 720px;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 22px 16px 34px;
 }
@@ -203,6 +227,33 @@ h1 {
   gap: 14px;
   flex-wrap: wrap;
   font-size: 14px;
+}
+
+.uploads-section {
+  margin-top: 20px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.section-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-main);
+  font-size: 20px;
+  margin: 0;
+}
+
+.uploads-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
 }
 
 .muted {

@@ -24,7 +24,7 @@ from src.video_crud_service.models import (
 )
 from src.video_crud_service.videos import serialize_video
 from src.communication_service.models import Notification
-from src.dashboard_service.models import SearchHistory, WatchHistory, Subscription
+from src.dashboard_service.models import SearchHistory, WatchHistory, Subscription, User
 from src.dashboard_service.tag_taxonomy import TAG_TAXONOMY_SEED
 
 logging.basicConfig(level=logging.INFO)
@@ -955,6 +955,22 @@ def search_history(
     }
 
 
+@app.get("/search/users")
+def search_users(q: str = Query(..., min_length=1), db: Session = Depends(get_db)):
+    """Return active users whose name matches the query."""
+    logger.info("User search requested: %s", q)
+    users = (
+        db.query(User)
+        .filter(User.is_active == True, User.name.ilike(f"%{q}%"))
+        .limit(20)
+        .all()
+    )
+    return {
+        "query": q,
+        "results": [{"id": u.id, "name": u.name, "role": u.role} for u in users],
+    }
+
+
 @app.get("/subscriptions/feed")
 def subscriptions_feed(
     user_id: str = Query(...),
@@ -975,6 +991,25 @@ def subscriptions_feed(
         .all()
     )
     return {"user_id": user_id, "videos": [serialize_video(v) for v in videos]}
+
+
+@app.get("/subscriptions/channel-subscribers")
+def list_channel_subscribers(
+    channel_user_id: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    """List subscriber user IDs for the given channel (users who subscribed to this channel)."""
+    rows = (
+        db.query(Subscription)
+        .filter(Subscription.channel_user_id == channel_user_id)
+        .order_by(Subscription.created_at.desc())
+        .all()
+    )
+    return {
+        "channel_user_id": channel_user_id,
+        "subscriber_user_ids": [row.subscriber_user_id for row in rows],
+        "count": len(rows),
+    }
 
 
 @app.get("/subscriptions")
@@ -1167,7 +1202,13 @@ def recommend(
     - With user_id and watch history: rank by tag overlap + recency + popularity.
     """
     logger.info("Recommend requested user_id=%s", user_id)
-    videos = db.query(Video).order_by(Video.created_at.desc()).all()
+    base_query = db.query(Video)
+    if user_id:
+        try:
+            base_query = base_query.filter(Video.uploader_id != int(user_id))
+        except (ValueError, TypeError):
+            pass
+    videos = base_query.order_by(Video.created_at.desc()).all()
     if not videos:
         return {"videos": []}
 

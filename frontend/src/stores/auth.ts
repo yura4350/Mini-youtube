@@ -3,7 +3,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { authService } from '@/services/auth'
-import type { LoginPayload, RegisterPayload, User } from '@/types/auth'
+import type { ForgotPasswordPayload, LoginPayload, RegisterPayload, ResetPasswordPayload, User } from '@/types/auth'
 
 export const useAuthStore = defineStore('auth', () => {
   const currentUser = ref<User | null>(null)
@@ -42,6 +42,14 @@ export const useAuthStore = defineStore('auth', () => {
     return result
   }
 
+  async function requestPasswordReset(payload: ForgotPasswordPayload) {
+    return await authService.requestPasswordReset(payload)
+  }
+
+  async function confirmPasswordReset(payload: ResetPasswordPayload) {
+    return await authService.confirmPasswordReset(payload)
+  }
+
   function logout() {
     authService.logout()
     currentUser.value = null
@@ -55,6 +63,8 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     updateProfile,
     uploadProfileAvatar,
+    requestPasswordReset,
+    confirmPasswordReset,
     logout,
   }
 })

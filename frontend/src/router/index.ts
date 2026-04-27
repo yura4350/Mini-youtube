@@ -23,6 +23,12 @@ const router = createRouter({
       meta: { guestOnly: true },
     },
     {
+      path: '/reset-password',
+      name: 'reset-password',
+      component: () => import('../views/ResetPasswordView.vue'),
+      meta: { guestOnly: true },
+    },
+    {
       path: '/profile',
       name: 'profile',
       component: () => import('../views/ProfileView.vue'),
@@ -47,8 +53,9 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: '/messages',
-      name: 'messages',
+      path: '/chat',
+      alias: ['/messages'],
+      name: 'chat',
       component: () => import('../views/MessagesView.vue'),
       meta: { requiresAuth: true },
     },

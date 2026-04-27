@@ -8,6 +8,9 @@ import type {
   UserPreferencesDTO,
   UserPreferencesPatch,
   PreferencesUpdateResult,
+  ForgotPasswordPayload,
+  ResetPasswordPayload,
+  PasswordResetResult,
 } from '@/types/auth'
 
 // Use the environment variable of where the backend is hosted
@@ -25,8 +28,7 @@ const AUTH_API_BASE_URL = (
 const ACCESS_TOKEN_KEY = 'media_frontend_access_token'
 const CURRENT_USER_KEY = 'media_frontend_current_user'
 
-const DEFAULT_AVATAR_URL =
-  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
+const DEFAULT_AVATAR_URL = '/default-avatar.svg'
 
 const AVATAR_FILE_PREFIX = '/user/profile/avatar/file/'
 
@@ -149,6 +151,75 @@ async function updateUserPreferences(patch: UserPreferencesPatch): Promise<Prefe
     return { ok: true, preferences }
   } catch {
     return { ok: false, message: 'Unable to reach auth service.' }
+  }
+}
+
+async function requestPasswordReset(payload: ForgotPasswordPayload): Promise<PasswordResetResult> {
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: payload.email.trim(),
+      }),
+    })
+
+    if (!response.ok) {
+      const err = (await response.json().catch(() => null)) as { detail?: unknown } | null
+      return {
+        ok: false,
+        message: parseApiErrorDetail(err?.detail, 'Could not process password reset request.'),
+      }
+    }
+
+    const body = (await response.json().catch(() => null)) as { message?: unknown } | null
+    return {
+      ok: true,
+      message:
+        typeof body?.message === 'string' && body.message.trim()
+          ? body.message
+          : 'If that email is in our system, a reset link has been sent.',
+    }
+  } catch {
+    return {
+      ok: false,
+      message: 'Unable to reach auth service.',
+    }
+  }
+}
+
+async function confirmPasswordReset(payload: ResetPasswordPayload): Promise<PasswordResetResult> {
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: payload.token,
+        new_password: payload.newPassword,
+      }),
+    })
+
+    if (!response.ok) {
+      const err = (await response.json().catch(() => null)) as { detail?: unknown } | null
+      return {
+        ok: false,
+        message: parseApiErrorDetail(err?.detail, 'Password reset failed.'),
+      }
+    }
+
+    const body = (await response.json().catch(() => null)) as { message?: unknown } | null
+    return {
+      ok: true,
+      message:
+        typeof body?.message === 'string' && body.message.trim()
+          ? body.message
+          : 'Password has been reset successfully.',
+    }
+  } catch {
+    return {
+      ok: false,
+      message: 'Unable to reach auth service.',
+    }
   }
 }
 
@@ -470,5 +541,7 @@ export const authService = {
   uploadAvatar,
   fetchUserPreferences,
   updateUserPreferences,
+  requestPasswordReset,
+  confirmPasswordReset,
   logout,
 }
