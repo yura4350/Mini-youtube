@@ -78,7 +78,7 @@ deploy_to_duke_vm:
     - chmod 644 ~/.ssh/known_hosts
   script:
     # Connect via SSH to navigate to the directory, pull latest changes, and rebuild Docker containers
-    - ssh $SERVER_USER@$SERVER_IP "cd media_server_team02 && git checkout main && git pull origin main && docker compose down && docker compose up -d --build"
+    - ssh $SERVER_USER@$SERVER_IP "cd media_server_team02 && git checkout dev && git pull origin dev && docker compose down && docker compose up -d --build"
   only:
     # Only run this job on the dev branch
-    - main
+    - dev
