@@ -1,8 +1,9 @@
 import logging
 import logging.handlers
 import os
-import subprocess
 import time
+
+import psutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -148,5 +149,5 @@ def get_metrics():
         "uptime_seconds": round(time.time() - _start_time, 2),
         "total_requests": _request_count,
         "log_entries": len(_memory_handler.buffer),
-        "memory_rss_mb": round(int(subprocess.check_output(["ps", "-o", "rss=", "-p", str(os.getpid())]).decode().strip() or 0) / 1024, 2),
+        "memory_rss_mb": round(psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024, 2),
     }

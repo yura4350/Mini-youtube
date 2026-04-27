@@ -1,4 +1,5 @@
 fastapi==0.135.2
+psutil
 psycopg2-binary==2.9.10
 SQLAlchemy==2.0.41
 python-multipart==0.0.20
