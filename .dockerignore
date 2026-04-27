@@ -1,5 +1,6 @@
 .git
 .venv
+.mov
 __pycache__/
 *.pyc
 *.pyo
