@@ -3,7 +3,7 @@ Media Server
 
 This project implements a Media Server composed of several micro-services.
 
-Name: MiniTube — Iurii Beliaev, Temesgen Tewolde, Changmin Shin, Zhao Huang
+Name: NewTube - Iurii Beliaev, Temesgen Tewolde, Changmin Shin, Zhao Huang
 
 ### Timeline
 
