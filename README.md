@@ -62,21 +62,7 @@ This project implements a Media Server composed of several micro-services.
    ```
    All containers should show "Up" status with healthy health checks.
 
-#### Accessing the Services from Team Machines
-
-The dev branch is hosted on `vcm-52418.vm.duke.edu`. Access services using:
-
-| Service | URL | Purpose |
-|---------|-----|---------|
-| Frontend | `http://vcm-52418.vm.duke.edu:5173` | Web UI |
-| Video API | `http://vcm-52418.vm.duke.edu:8000` | Video CRUD operations |
-| Admin API | `http://vcm-52418.vm.duke.edu:8001` | Admin functions & metrics |
-| Communication API | `http://vcm-52418.vm.duke.edu:8002` | Communication service |
-| User Accounts & Prefs API | `http://vcm-52418.vm.duke.edu:8003` | User management |
-| Dashboard API | `http://vcm-52418.vm.duke.edu:8004` | Dashboard data |
-| Intelligence API | `http://vcm-52418.vm.duke.edu:8005` | AI summarize/tagging service |
-
-Ensure your machine can reach `vcm-52418.vm.duke.edu` on these ports (may require Duke network access).
+#### Accessing the Services deployed on the VM (currently, deployment is stopped)
 
 The **main** branch is hosted on `vcm-52527.vm.duke.edu`. Access services using:
 
