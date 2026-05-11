@@ -1,17 +1,7 @@
-Media Server
+MiniTube
 ====
 
 This project implements a Media Server composed of several micro-services.
-
-Name: MiniTube — Iurii Beliaev, Temesgen Tewolde, Changmin Shin, Zhao Huang
-
-### Timeline
-
-Start Date: March 18, 2026
-
-Finish Date: April 27, 2026
-
-Hours Spent: 120 hours total (30 hours per teammate)
 
 
 ### Tutorial, LLMs, and other Code used
